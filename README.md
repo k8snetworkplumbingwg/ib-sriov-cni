@@ -124,7 +124,7 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 # cat > /etc/cni/net.d/10-infiniband.conf <<EOF
 {
     "cniVersion": "0.3.1",
-    "name": "infiniband-net",
+    "name": "mynet",
     "type": "infiniband",
         "deviceID": "0000:03:02.0",
         "ipam": {

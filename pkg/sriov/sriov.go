@@ -165,6 +165,25 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string
 		return fmt.Errorf("failed to move IF %s to netns: %q", tempName, err)
 	}
 
+	// 4. Set VF GUID
+	if conf.GUID != "" {
+		hwAddr, err := net.ParseMAC(conf.GUID)
+		if err != nil {
+			return fmt.Errorf("failed to parse Vf user's config GUID %s: %v", conf.GUID, err)
+		}
+		pfLink, err := s.nLink.LinkByName(conf.Master)
+		if err != nil {
+			return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		}
+		if err = netlink.LinkSetVfNodeGUID(pfLink, conf.VFID, hwAddr); err != nil {
+			return fmt.Errorf("failed to set vf port guid: %v", err)
+		}
+
+		if err = netlink.LinkSetVfPortGUID(pfLink, conf.VFID, hwAddr); err != nil {
+			return fmt.Errorf("failed to set vf port guid: %v", err)
+		}
+	}
+
 	if err := netns.Do(func(_ ns.NetNS) error {
 		// 4. Set Pod IF name
 		if err := s.nLink.LinkSetName(linkObj, podifName); err != nil {

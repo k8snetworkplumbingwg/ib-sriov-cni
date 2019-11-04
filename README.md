@@ -115,6 +115,7 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 * `name` (string, required): the name of the network
 * `type` (string, required): "infiniband"
 * `deviceID` (string, required): A valid pci address of an SRIOV NIC's VF. e.g. "0000:03:02.3"
+* `guid` (string, optional): Infiniband Guid for VF.
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network, `dhcp` is not supported.
 
 

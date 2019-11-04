@@ -12,5 +12,6 @@ type NetConf struct {
 	VFID        int
 	HostIFNames string // VF netdevice name(s)
 	ContIFNames string // VF names after in the container; used during deletion
+	GUID        string `json:"guid"`
 	LinkState   string `json:"link_state,omitempty"` // auto|enable|disable
 }

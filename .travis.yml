@@ -1,22 +1,6 @@
 language: go
 sudo: required
 
-matrix:
-  include:
-    - name: amd64
-      os: linux
-      env: ARCH=amd64
-    - name: ppc64le
-      os: linux-ppc64le
-      env:
-        - ARCH=ppc64le
-        - DOCKERFILE=Dockerfile.ppc64le
-
-env:
-  global:
-    - PATH=$GOROOT/bin:$GOPATH/bin:$PATH
-    - IMAGE_NAME=mmdh/ib-sriov-cni
-
 script:
   - make lint
   - sudo -E env "PATH=$PATH" make test
@@ -31,27 +15,8 @@ deploy:
   - provider: script
     skip_cleanup: true
     script: >
-      bash -c '
-      if [ "${ARCH}" == "amd64" ]; then
-        docker push $IMAGE_NAME
-      fi
-      docker tag $IMAGE_NAME $IMAGE_NAME:$ARCH;
-      docker push $IMAGE_NAME:$ARCH;
-      echo done'
+     bash -c '
+     docker push $IMAGE_NAME;
+     echo done'
     on:
       branch: master
-  # Push image to Dockerhub on tag
-  - provider: script
-    skip_cleanup: true
-    script: >
-      bash -c '
-      if [ "${ARCH}" == "amd64" ]; then
-        docker push $IMAGE_NAME:$TRAVIS_TAG
-      fi
-      docker tag $IMAGE_NAME $IMAGE_NAME:$TRAVIS_TAG-$ARCH;
-      docker push $IMAGE_NAME:$TRAVIS_TAG-$ARCH;
-      echo done'
-    on:
-      tags: true
-      all_branches: true
-      condition: "$TRAVIS_TAG =~ ^v[0-9].*$"

@@ -27,7 +27,7 @@ func init() {
 func cmdAdd(args *skel.CmdArgs) error {
 	netConf, err := config.LoadConf(args.StdinData)
 	if err != nil {
-		return fmt.Errorf("SRI-OV Infiniband CNI failed to load netconf: %v", err)
+		return fmt.Errorf("InfiniBand SRI-OV CNI failed to load netconf: %v", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
@@ -38,7 +38,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	sm := sriov.NewSriovManager()
 	if err := sm.ApplyVFConfig(netConf); err != nil {
-		return fmt.Errorf("SRI-OV Infiniband CNI failed to configure VF %q", err)
+		return fmt.Errorf("InfiniBand SRI-OV CNI failed to configure VF %q", err)
 	}
 
 	result := &current.Result{}

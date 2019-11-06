@@ -1,5 +1,5 @@
 # Package related
-BINARY_NAME=infiniband
+BINARY_NAME=ib-sriov-cni
 PACKAGE=ib-sriov-cni
 ORG_PATH=github.com/Mellanox
 REPO_PATH=$(ORG_PATH)/$(PACKAGE)

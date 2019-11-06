@@ -1,10 +1,10 @@
-   * [SR-IOV Infiniband CNI plugin](#sr-iov-cni-plugin)
+   * [InfiniBand SR-IOV CNI plugin](#infiniband-sr-iov-cni-plugin)
       * [Build](#build)
       * [Enable SR-IOV](#enable-sr-iov)
       * [Configuration reference](#configuration-reference)
       * [Usage](#usage)
 
-# SR-IOV Infiniband CNI plugin
+# InfiniBand SR-IOV CNI plugin
 NIC with [SR-IOV](http://blog.scottlowe.org/2009/12/02/what-is-sr-iov/) capabilities work by introducing the idea of physical functions (PFs) and virtual functions (VFs). 
 
 A PF is used by host and VF configurations are applied through the PF. Each VF can be treated as a separate physical NIC and assigned to one container.
@@ -17,11 +17,11 @@ To build the plugin binary:
 # make
 ```
 
-Upon successful build the plugin binary will be available in `build/infiniband`.
+Upon successful build the plugin binary will be available in `build/ib-sriov-cni`.
 
 ## Enable SR-IOV
 
-SRIOV-CNI support Mellanox ConnectX®-4 Lx and ConnectX®-5 adapter cards.
+IB-SRIOV-CNI support Mellanox ConnectX®-4/ConnectX®-5/ConnectX®-6 adapter cards
 To enable SR-IOV functionality the following steps are required:
 
 1- Enable SR-IOV in the NIC's Firmware.
@@ -113,20 +113,20 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 ## Configuration reference
 
 * `name` (string, required): the name of the network
-* `type` (string, required): "infiniband"
-* `deviceID` (string, required): A valid pci address of an SRIOV NIC's VF. e.g. "0000:03:02.3"
-* `guid` (string, optional): Infiniband Guid for VF.
+* `type` (string, required): "ib-sriov-cni"
+* `deviceID` (string, required): A valid pci address of an InfiniBand SR-IOV NIC's VF. e.g. "0000:03:02.3"
+* `guid` (string, optional): InfiniBand Guid for VF.
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network, `dhcp` is not supported.
 
 
 ## Usage
 
 ```
-# cat > /etc/cni/net.d/10-infiniband.conf <<EOF
+# cat > /etc/cni/net.d/10-ib-sriov-cni.conf <<EOF
 {
     "cniVersion": "0.3.1",
     "name": "mynet",
-    "type": "infiniband",
+    "type": "ib-sriov-cni",
         "deviceID": "0000:03:02.0",
         "ipam": {
                 "type": "host-local",

@@ -76,7 +76,7 @@ func CreateTmpSysFs() error {
 	originalRoot, err := os.Open("/")
 	ts.originalRoot = originalRoot
 
-	tmpdir, err := ioutil.TempDir("/tmp", "infiniband-plugin-testfiles-")
+	tmpdir, err := ioutil.TempDir("/tmp", "ib-sriov-cni-plugin-testfiles-")
 	if err != nil {
 		return err
 	}

@@ -2,17 +2,17 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: kube-infiniband-cni-ds-amd64
+  name: kube-ib-sriov-cni-ds-amd64
   namespace: kube-system
   labels:
     tier: node
-    app: infiniband-cni
+    app: ib-sriov-cni
 spec:
   template:
     metadata:
       labels:
         tier: node
-        app: infiniband-cni
+        app: ib-sriov-cni
     spec:
       hostNetwork: true
       nodeSelector:
@@ -22,8 +22,8 @@ spec:
           operator: Exists
           effect: NoSchedule
       containers:
-        - name: kube-infiniband-cni
-          image: mellanox/infiniband-cni
+        - name: kube-ib-sriov-cni
+          image: mellanox/ib-sriov-cni
           imagePullPolicy: Never
           securityContext:
             privileged: true
@@ -46,17 +46,17 @@ spec:
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-  name: kube-infiniband-cni-ds-ppc64le
+  name: kube-ib-sriov-cni-ds-ppc64le
   namespace: kube-system
   labels:
     tier: node
-    app: infiniband-cni
+    app: ib-sriov-cni
 spec:
   template:
     metadata:
       labels:
         tier: node
-        app: infiniband-cni
+        app: ib-sriov-cni
     spec:
       hostNetwork: true
       nodeSelector:
@@ -66,8 +66,8 @@ spec:
           operator: Exists
           effect: NoSchedule
       containers:
-        - name: kube-infiniband-cni
-          image: mellanox/infiniband-cni:ppc64le
+        - name: kube-ib-sriov-cni
+          image: mellanox/ib-sriov-cni:ppc64le
           imagePullPolicy: Never
           securityContext:
             privileged: true

@@ -13,7 +13,7 @@ import (
 
 var (
 	// DefaultCNIDir used for caching NetConf
-	DefaultCNIDir = "/var/lib/cni/infiniband"
+	DefaultCNIDir = "/var/lib/cni/ib-sriov-cni"
 )
 
 // LoadConf parses and validates stdin netconf and returns NetConf object

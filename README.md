@@ -1,6 +1,8 @@
    * [InfiniBand SR-IOV CNI plugin](#infiniband-sr-iov-cni-plugin)
       * [Build](#build)
       * [Enable SR-IOV](#enable-sr-iov)
+         * [Using Upstream Mstflint] (#using-upstream-mstflint)
+         * [Using Mellanox OFED] (#using-mellanox-ofed)
       * [Configuration reference](#configuration-reference)
       * [Usage](#usage)
 
@@ -21,8 +23,84 @@ Upon successful build the plugin binary will be available in `build/ib-sriov-cni
 
 ## Enable SR-IOV
 
-IB-SRIOV-CNI support Mellanox ConnectX®-4/ConnectX®-5/ConnectX®-6 adapter cards
-To enable SR-IOV functionality the following steps are required:
+IB-SRIOV-CNI support Mellanox ConnectX®-4/ConnectX®-5/ConnectX®-6 adapter cards.
+
+### Using Upstream Mstflint
+
+To enable SR-IOV functionality using upstream mstflint, the following steps are required:
+
+Install Mstflint package.
+```
+# yum install -y mstflint
+
+```
+
+Enable SR-IOV
+```
+# lspci | grep Mellanox
+02:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+02:00.1 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+
+# mstconfig -d 0000:02:00.0 set SRIOV_EN=1 NUM_OF_VFS=8
+
+Device #1:
+----------
+
+Device type:    ConnectX5       
+Name:           MCX556A-ECA_Ax  
+Description:    ConnectX-5 VPI adapter card; EDR IB (100Gb/s) and 100GbE; dual-port QSFP28; PCIe3.0 x16; tall bracket; ROHS R6
+Device:         0000:02:00.0    
+
+Configurations:                              Next Boot       New
+         SRIOV_EN                            False(0)       True(1)         
+         NUM_OF_VFS                          0              8               
+
+ Apply new Configuration? (y/n) [n] : y
+Applying... Done!
+-I- Please reboot machine to load new configurations.
+
+```
+
+Reboot the machine
+```
+# reboot
+```
+
+Create SR-IOV VFs
+
+```
+# echo 4 > /sys/class/net/ib0/device/sriov_numvfs
+
+# lspci | grep Mellanox
+02:00.0 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+02:00.1 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4]
+02:00.2 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4 Virtual Function]
+02:00.3 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4 Virtual Function]
+02:00.4 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4 Virtual Function]
+02:00.5 Infiniband controller: Mellanox Technologies MT27700 Family [ConnectX-4 Virtual Function]
+
+# ip link show
+...
+ib2: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/infiniband c6:6d:7d:dd:2a:d5 brd ff:ff:ff:ff:ff:ff
+ib3: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/infiniband 42:3e:07:68:da:fb brd ff:ff:ff:ff:ff:ff
+ib4: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+    link/infiniband 42:68:f2:aa:c2:27 brd ff:ff:ff:ff:ff:ff
+ib5: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN mode DEFAULT group default qlen 1000
+...
+```
+
+To change the number of VFs reset the number to 0 then set the needed number
+
+```
+echo 0 > /sys/class/net/ib0/device/sriov_numvfs
+echo 8 > /sys/class/net/ib0/device/sriov_numvfs
+```
+
+### Using Mellanox OFED
+
+To enable SR-IOV functionality using Mellnaox's OFED, the following steps are required:
 
 1- Enable SR-IOV in the NIC's Firmware.
 
@@ -55,7 +133,7 @@ MST devices:
 Enable SR-IOV
 
 ```
-# mlxconfig -d /dev/mst/mt4115_pciconf0 q set SRIOV_EN=1 NUM_OF_VFS=8
+# mlxconfig -d /dev/mst/mt4115_pciconf0 set SRIOV_EN=1 NUM_OF_VFS=8
 ...
 Apply new Configuration? ? (y/n) [n] : y
 Applying... Done!
@@ -74,7 +152,7 @@ Reboot the machine
 mlx5_0 port 1 ==> ib0 (Up)
 mlx5_1 port 1 ==> ib1 (Down)
 
-# echo 4 > /sys/class/net/enp2s0f0/device/sriov_numvfs
+# echo 4 > /sys/class/net/ib0/device/sriov_numvfs
 # ibdev2netdev -v
 0000:02:00.0 mlx5_0 (MT4115 - MT1523X04353) CX456A - ConnectX-4 QSFP fw 12.23.1020 port 1 (ACTIVE) ==> ib0 (Up)
 0000:02:00.1 mlx5_1 (MT4115 - MT1523X04353) CX456A - ConnectX-4 QSFP fw 12.23.1020 port 1 (ACTIVE) ==> ib1 (Down)

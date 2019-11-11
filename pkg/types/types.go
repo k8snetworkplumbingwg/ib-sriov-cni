@@ -4,6 +4,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+	"net"
 )
 
 // NetConf extends types.NetConf for ib-sriov-cni
@@ -37,6 +38,8 @@ type NetlinkManager interface {
 	LinkSetNsFd(netlink.Link, int) error
 	LinkSetName(netlink.Link, string) error
 	LinkSetVfState(netlink.Link, int, uint32) error
+	LinkSetVfPortGUID(netlink.Link, int, net.HardwareAddr) error
+	LinkSetVfNodeGUID(netlink.Link, int, net.HardwareAddr) error
 }
 
 // PciUtils is interface to help in SR-IOV functions

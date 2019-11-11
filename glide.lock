@@ -1,5 +1,5 @@
-hash: bdc1c5bc69fdf4f5090517250bd6b594ad7a13615c00ec2715351be3f5fae0d9
-updated: 2019-09-25T00:30:57.166016471+03:00
+hash: 1b60a527069f86471cc064ca830b33b3cd135d8a556b3651bedfe7ae7ea67e9b
+updated: 2019-11-17T16:50:11.89555515+02:00
 imports:
 - name: github.com/containernetworking/cni
   version: dc953e2fd91f9bc624b03cf9ea3706796bfee920
@@ -24,6 +24,8 @@ imports:
   version: 78b5fff24e6df8886ef8eca9411f683a884349a5
   subpackages:
   - iptables
+- name: github.com/Mellanox/sriovnet
+  version: fbd1a9d10d0113df9e2de497f37dec9535f2ff7c
 - name: github.com/onsi/ginkgo
   version: 7f8ab55aaf3b86885aa55b762e803744d1674700
   subpackages:
@@ -57,6 +59,8 @@ imports:
   - types
 - name: github.com/safchain/ethtool
   version: 42ed695e3de80b9d695f280295fd7994639f209d
+- name: github.com/satori/go.uuid
+  version: b2ce2384e17bbe0c6d34077efa39dbab3e09123b
 - name: github.com/stretchr/testify
   version: 221dbe5ed46703ee255b1da0dec05086f5035f62
   subpackages:
@@ -84,4 +88,4 @@ testImports:
 - name: github.com/stretchr/objx
   version: 35313a95ee26395aa17d366c71a2ccf788fa69b6
 - name: gopkg.in/yaml.v2
-  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
+  version: f90ceb4f409096b60e2e9076b38b304b8246e5fa

@@ -709,13 +709,13 @@ func (h *Handle) LinkSetVfGUID(link Link, vf int, vfGuid net.HardwareAddr, guidT
 
 // LinkSetMaster sets the master of the link device.
 // Equivalent to: `ip link set $link master $master`
-func LinkSetMaster(link Link, master Link) error {
+func LinkSetMaster(link Link, master *Bridge) error {
 	return pkgHandle.LinkSetMaster(link, master)
 }
 
 // LinkSetMaster sets the master of the link device.
 // Equivalent to: `ip link set $link master $master`
-func (h *Handle) LinkSetMaster(link Link, master Link) error {
+func (h *Handle) LinkSetMaster(link Link, master *Bridge) error {
 	index := 0
 	if master != nil {
 		masterBase := master.Attrs()
@@ -1300,8 +1300,6 @@ func (h *Handle) linkModify(link Link, flags int) error {
 		addGretapAttrs(link, linkInfo)
 	case *Iptun:
 		addIptunAttrs(link, linkInfo)
-	case *Ip6tnl:
-		addIp6tnlAttrs(link, linkInfo)
 	case *Sittun:
 		addSittunAttrs(link, linkInfo)
 	case *Gretun:
@@ -1559,8 +1557,6 @@ func LinkDeserialize(hdr *unix.NlMsghdr, m []byte) (Link, error) {
 						link = &Gretap{}
 					case "ipip":
 						link = &Iptun{}
-					case "ip6tnl":
-						link = &Ip6tnl{}
 					case "sit":
 						link = &Sittun{}
 					case "gre":
@@ -1606,8 +1602,6 @@ func LinkDeserialize(hdr *unix.NlMsghdr, m []byte) (Link, error) {
 						parseGretapData(link, data)
 					case "ipip":
 						parseIptunData(link, data)
-					case "ip6tnl":
-						parseIp6tnlData(link, data)
 					case "sit":
 						parseSittunData(link, data)
 					case "gre":
@@ -2148,7 +2142,7 @@ func parseBondData(link Link, data []syscall.NetlinkRouteAttr) {
 		case nl.IFLA_BOND_ARP_INTERVAL:
 			bond.ArpInterval = int(native.Uint32(data[i].Value[0:4]))
 		case nl.IFLA_BOND_ARP_IP_TARGET:
-			bond.ArpIpTargets = parseBondArpIpTargets(data[i].Value)
+			// TODO: implement
 		case nl.IFLA_BOND_ARP_VALIDATE:
 			bond.ArpValidate = BondArpValidate(native.Uint32(data[i].Value[0:4]))
 		case nl.IFLA_BOND_ARP_ALL_TARGETS:
@@ -2189,27 +2183,6 @@ func parseBondData(link Link, data []syscall.NetlinkRouteAttr) {
 			bond.TlbDynamicLb = int(data[i].Value[0])
 		}
 	}
-}
-
-func parseBondArpIpTargets(value []byte) []net.IP {
-	data, err := nl.ParseRouteAttr(value)
-	if err != nil {
-		return nil
-	}
-
-	targets := []net.IP{}
-	for i := range data {
-		target := net.IP(data[i].Value)
-		if ip := target.To4(); ip != nil {
-			targets = append(targets, ip)
-			continue
-		}
-		if ip := target.To16(); ip != nil {
-			targets = append(targets, ip)
-		}
-	}
-
-	return targets
 }
 
 func addBondSlaveAttrs(bondSlave *BondSlave, linkInfo *nl.RtAttr) {
@@ -2580,55 +2553,6 @@ func parseIptunData(link Link, data []syscall.NetlinkRouteAttr) {
 			iptun.EncapFlags = native.Uint16(datum.Value[0:2])
 		case nl.IFLA_IPTUN_COLLECT_METADATA:
 			iptun.FlowBased = int8(datum.Value[0]) != 0
-		}
-	}
-}
-
-func addIp6tnlAttrs(ip6tnl *Ip6tnl, linkInfo *nl.RtAttr) {
-	data := linkInfo.AddRtAttr(nl.IFLA_INFO_DATA, nil)
-
-	if ip6tnl.Link != 0 {
-		data.AddRtAttr(nl.IFLA_IPTUN_LINK, nl.Uint32Attr(ip6tnl.Link))
-	}
-
-	ip := ip6tnl.Local.To16()
-	if ip != nil {
-		data.AddRtAttr(nl.IFLA_IPTUN_LOCAL, []byte(ip))
-	}
-
-	ip = ip6tnl.Remote.To16()
-	if ip != nil {
-		data.AddRtAttr(nl.IFLA_IPTUN_REMOTE, []byte(ip))
-	}
-
-	data.AddRtAttr(nl.IFLA_IPTUN_TTL, nl.Uint8Attr(ip6tnl.Ttl))
-	data.AddRtAttr(nl.IFLA_IPTUN_TOS, nl.Uint8Attr(ip6tnl.Tos))
-	data.AddRtAttr(nl.IFLA_IPTUN_ENCAP_LIMIT, nl.Uint8Attr(ip6tnl.EncapLimit))
-	data.AddRtAttr(nl.IFLA_IPTUN_FLAGS, nl.Uint32Attr(ip6tnl.Flags))
-	data.AddRtAttr(nl.IFLA_IPTUN_PROTO, nl.Uint8Attr(ip6tnl.Proto))
-	data.AddRtAttr(nl.IFLA_IPTUN_FLOWINFO, nl.Uint32Attr(ip6tnl.FlowInfo))
-}
-
-func parseIp6tnlData(link Link, data []syscall.NetlinkRouteAttr) {
-	ip6tnl := link.(*Ip6tnl)
-	for _, datum := range data {
-		switch datum.Attr.Type {
-		case nl.IFLA_IPTUN_LOCAL:
-			ip6tnl.Local = net.IP(datum.Value[:16])
-		case nl.IFLA_IPTUN_REMOTE:
-			ip6tnl.Remote = net.IP(datum.Value[:16])
-		case nl.IFLA_IPTUN_TTL:
-			ip6tnl.Ttl = uint8(datum.Value[0])
-		case nl.IFLA_IPTUN_TOS:
-			ip6tnl.Tos = uint8(datum.Value[0])
-		case nl.IFLA_IPTUN_ENCAP_LIMIT:
-			ip6tnl.EncapLimit = uint8(datum.Value[0])
-		case nl.IFLA_IPTUN_FLAGS:
-			ip6tnl.Flags = native.Uint32(datum.Value[:4])
-		case nl.IFLA_IPTUN_PROTO:
-			ip6tnl.Proto = uint8(datum.Value[0])
-		case nl.IFLA_IPTUN_FLOWINFO:
-			ip6tnl.FlowInfo = native.Uint32(datum.Value[:4])
 		}
 	}
 }

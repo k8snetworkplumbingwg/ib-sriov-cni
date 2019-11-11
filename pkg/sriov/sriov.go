@@ -2,6 +2,7 @@ package sriov
 
 import (
 	"fmt"
+	"github.com/Mellanox/sriovnet"
 	"net"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -43,6 +44,16 @@ func (n *MyNetlink) LinkSetName(link netlink.Link, name string) error {
 // LinkSetVfState using NetlinkManager
 func (n *MyNetlink) LinkSetVfState(link netlink.Link, vf int, state uint32) error {
 	return netlink.LinkSetVfState(link, vf, state)
+}
+
+// LinkSetVfPortGUID using NetlinkManager
+func (n *MyNetlink) LinkSetVfPortGUID(link netlink.Link, vf int, portGUID net.HardwareAddr) error {
+	return netlink.LinkSetVfPortGUID(link, vf, portGUID)
+}
+
+// LinkSetVfNodeGUID using NetlinkManager
+func (n *MyNetlink) LinkSetVfNodeGUID(link netlink.Link, vf int, nodeGUID net.HardwareAddr) error {
+	return netlink.LinkSetVfNodeGUID(link, vf, nodeGUID)
 }
 
 type pciUtilsImpl struct{}
@@ -101,6 +112,9 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string
 
 	// 4. Set VF GUID
 	if conf.GUID != "" {
+		if len(conf.GUID) < 8 {
+			return fmt.Errorf("invalid guid %s", conf.GUID)
+		}
 		hwAddr, err := net.ParseMAC(conf.GUID)
 		if err != nil {
 			return fmt.Errorf("failed to parse Vf user's config GUID %s: %v", conf.GUID, err)
@@ -184,6 +198,42 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 	pfLink, err := s.nLink.LinkByName(conf.Master)
 	if err != nil {
 		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+	}
+
+	// Set link guid
+	if conf.GUID != "" {
+		guid, err := net.ParseMAC(conf.GUID)
+		if err != nil {
+			return fmt.Errorf("failed to parse guid %s: %v", conf.GUID, err)
+		}
+		if err = s.nLink.LinkSetVfNodeGUID(pfLink, conf.VFID, guid); err != nil {
+			return fmt.Errorf("failed to add node guid %s: %v", guid, err)
+		}
+		if err = s.nLink.LinkSetVfPortGUID(pfLink, conf.VFID, guid); err != nil {
+			return fmt.Errorf("failed to add port guid %s: %v", guid, err)
+		}
+		// unbind vf then bind it to apply the new guid
+		pfHandle, err := sriovnet.GetPfNetdevHandle(conf.Master)
+		if err != nil {
+			return err
+		}
+		var vf *sriovnet.VfObj
+		found := false
+		for _, vfObj := range pfHandle.List {
+			if vfObj.PciAddress == conf.DeviceID {
+				vf = vfObj
+				found = true
+			}
+		}
+		if !found {
+			return fmt.Errorf("failed to find VF %s for PF %s", conf.DeviceID, conf.Master)
+		}
+		if err = sriovnet.UnbindVf(pfHandle, vf); err != nil {
+			return err
+		}
+		if err = sriovnet.BindVf(pfHandle, vf); err != nil {
+			return err
+		}
 	}
 
 	// Set link state

@@ -1,4 +1,4 @@
-package: github.com/intel/sriov-cni
+package: github.com/Mellanox/ib-sriov-cni
 import:
 - package: github.com/containernetworking/cni
   version: dc953e2fd91f9bc624b03cf9ea3706796bfee920
@@ -59,3 +59,5 @@ import:
   version: ^1.2.2
   subpackages:
   - mock
+- package: github.com/Mellanox/sriovnet
+  version: ^0.5.0

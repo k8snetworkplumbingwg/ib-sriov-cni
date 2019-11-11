@@ -21,9 +21,6 @@ type NetlinkManager interface {
 	LinkSetDown(netlink.Link) error
 	LinkSetNsFd(netlink.Link, int) error
 	LinkSetName(netlink.Link, string) error
-	LinkSetVfTxRate(netlink.Link, int, int) error
-	LinkSetVfSpoofchk(netlink.Link, int, bool) error
-	LinkSetVfTrust(netlink.Link, int, bool) error
 	LinkSetVfState(netlink.Link, int, uint32) error
 }
 
@@ -35,26 +32,6 @@ type MyNetlink struct {
 // LinkByName implements NetlinkManager
 func (n *MyNetlink) LinkByName(name string) (netlink.Link, error) {
 	return netlink.LinkByName(name)
-}
-
-// LinkSetVfVlan using NetlinkManager
-func (n *MyNetlink) LinkSetVfVlan(link netlink.Link, vf, vlan int) error {
-	return netlink.LinkSetVfVlan(link, vf, vlan)
-}
-
-// LinkSetVfVlanQos sets VLAN ID and QoS field for given VF using NetlinkManager
-func (n *MyNetlink) LinkSetVfVlanQos(link netlink.Link, vf, vlan, qos int) error {
-	return netlink.LinkSetVfVlanQos(link, vf, vlan, qos)
-}
-
-// LinkSetVfHardwareAddr using NetlinkManager
-func (n *MyNetlink) LinkSetVfHardwareAddr(link netlink.Link, vf int, hwaddr net.HardwareAddr) error {
-	return netlink.LinkSetVfHardwareAddr(link, vf, hwaddr)
-}
-
-// LinkSetHardwareAddr using NetlinkManager
-func (n *MyNetlink) LinkSetHardwareAddr(link netlink.Link, hwaddr net.HardwareAddr) error {
-	return netlink.LinkSetHardwareAddr(link, hwaddr)
 }
 
 // LinkSetUp using NetlinkManager
@@ -75,21 +52,6 @@ func (n *MyNetlink) LinkSetNsFd(link netlink.Link, fd int) error {
 // LinkSetName using NetlinkManager
 func (n *MyNetlink) LinkSetName(link netlink.Link, name string) error {
 	return netlink.LinkSetName(link, name)
-}
-
-// LinkSetVfTxRate using NetlinkManager
-func (n *MyNetlink) LinkSetVfTxRate(link netlink.Link, vf int, rate int) error {
-	return netlink.LinkSetVfTxRate(link, vf, rate)
-}
-
-// LinkSetVfSpoofchk using NetlinkManager
-func (n *MyNetlink) LinkSetVfSpoofchk(link netlink.Link, vf int, check bool) error {
-	return netlink.LinkSetVfSpoofchk(link, vf, check)
-}
-
-// LinkSetVfTrust using NetlinkManager
-func (n *MyNetlink) LinkSetVfTrust(link netlink.Link, vf int, state bool) error {
-	return netlink.LinkSetVfTrust(link, vf, state)
 }
 
 // LinkSetVfState using NetlinkManager
@@ -280,21 +242,6 @@ func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
 	pfLink, err := s.nLink.LinkByName(conf.Master)
 	if err != nil {
 		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
-	}
-
-	// Set spoofchk to on
-	if err = s.nLink.LinkSetVfSpoofchk(pfLink, conf.VFID, true); err != nil {
-		return fmt.Errorf("failed to enable spoof checking for vf %d: %v", conf.VFID, err)
-	}
-
-	// Set trust to off
-	if err = s.nLink.LinkSetVfTrust(pfLink, conf.VFID, false); err != nil {
-		return fmt.Errorf("failed to disable trust for vf %d: %v", conf.VFID, err)
-	}
-
-	// Disable rate limiting
-	if err = s.nLink.LinkSetVfTxRate(pfLink, conf.VFID, 0); err != nil {
-		return fmt.Errorf("failed to disable rate limiting for vf %d %v", conf.VFID, err)
 	}
 
 	// Reset link state to `auto`

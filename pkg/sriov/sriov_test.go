@@ -1,8 +1,6 @@
 package sriov
 
 import (
-	"net"
-
 	"github.com/Mellanox/ib-sriov-cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -39,62 +37,6 @@ func (_m *MockNetlinkManager) LinkByName(_a0 string) (netlink.Link, error) {
 	}
 
 	return r0, r1
-}
-
-// LinkSetVfVlan provides a mock function with given fields: _a0, _a1, _a2
-func (_m *MockNetlinkManager) LinkSetVfVlan(_a0 netlink.Link, _a1 int, _a2 int) error {
-	ret := _m.Called(_a0, _a1, _a2)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, int, int) error); ok {
-		r0 = rf(_a0, _a1, _a2)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// LinkSetVfHardwareAddr provides a mock function with given fields: _a0, _a1, _a2
-func (_m *MockNetlinkManager) LinkSetVfHardwareAddr(_a0 netlink.Link, _a1 int, _a2 net.HardwareAddr) error {
-	ret := _m.Called(_a0, _a1, _a2)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, int, net.HardwareAddr) error); ok {
-		r0 = rf(_a0, _a1, _a2)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// LinkSetHardwareAddr provides a mock function with given fields: _a0, _a1
-func (_m *MockNetlinkManager) LinkSetHardwareAddr(_a0 netlink.Link, _a1 net.HardwareAddr) error {
-	ret := _m.Called(_a0, _a1)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, net.HardwareAddr) error); ok {
-		r0 = rf(_a0, _a1)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// LinkSetVfVlanQos provides a mock function with given fields: _a0, _a1, _a2, _a3
-func (_m *MockNetlinkManager) LinkSetVfVlanQos(_a0 netlink.Link, _a1 int, _a2 int, _a3 int) error {
-	ret := _m.Called(_a0, _a1, _a2, _a3)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, int, int, int) error); ok {
-		r0 = rf(_a0, _a1, _a2, _a3)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
 }
 
 // LinkSetUp provides a mock function with given fields: _a0
@@ -146,48 +88,6 @@ func (_m *MockNetlinkManager) LinkSetName(_a0 netlink.Link, _a1 string) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(netlink.Link, string) error); ok {
 		r0 = rf(_a0, _a1)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// LinkSetVfTxRate provides a mock function with given fields: _a0, _a1, _a2
-func (_m *MockNetlinkManager) LinkSetVfTxRate(_a0 netlink.Link, _a1 int, _a2 int) error {
-	ret := _m.Called(_a0, _a1, _a2)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, int, int) error); ok {
-		r0 = rf(_a0, _a1, _a2)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// LinkSetVfSpoofchk provides a mock function with given fields: _a0, _a1, _a2
-func (_m *MockNetlinkManager) LinkSetVfSpoofchk(_a0 netlink.Link, _a1 int, _a2 bool) error {
-	ret := _m.Called(_a0, _a1, _a2)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, int, bool) error); ok {
-		r0 = rf(_a0, _a1, _a2)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// LinkSetVfTrust provides a mock function with given fields: _a0, _a1, _a2
-func (_m *MockNetlinkManager) LinkSetVfTrust(_a0 netlink.Link, _a1 int, _a2 bool) error {
-	ret := _m.Called(_a0, _a1, _a2)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(netlink.Link, int, bool) error); ok {
-		r0 = rf(_a0, _a1, _a2)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -340,8 +240,6 @@ var _ = Describe("Sriov", func() {
 			mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
 			mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(nil)
 			mocked.On("LinkSetUp", fakeLink).Return(nil)
-			mocked.On("LinkSetVfVlan", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("int")).Return(nil)
-			mocked.On("LinkSetVfVlanQos", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("int"), mock.AnythingOfType("int")).Return(nil)
 			sm := sriovManager{nLink: mocked}
 			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
 			Expect(err).NotTo(HaveOccurred())
@@ -381,7 +279,6 @@ var _ = Describe("Sriov", func() {
 				mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
 				mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(nil)
 				mocked.On("LinkSetUp", fakeLink).Return(nil)
-				mocked.On("LinkSetVfVlan", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("int")).Return(nil)
 				sm := sriovManager{nLink: mocked}
 				err = sm.ReleaseVF(netconf, podifName, contID, targetNetNS)
 				Expect(err).NotTo(HaveOccurred())

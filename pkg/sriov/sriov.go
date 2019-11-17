@@ -11,22 +11,8 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-// mocked netlink interface
-// required for unit tests
-
-// NetlinkManager is an interface to mock nelink library
-type NetlinkManager interface {
-	LinkByName(string) (netlink.Link, error)
-	LinkSetUp(netlink.Link) error
-	LinkSetDown(netlink.Link) error
-	LinkSetNsFd(netlink.Link, int) error
-	LinkSetName(netlink.Link, string) error
-	LinkSetVfState(netlink.Link, int, uint32) error
-}
-
 // MyNetlink NetlinkManager
 type MyNetlink struct {
-	lm NetlinkManager
 }
 
 // LinkByName implements NetlinkManager
@@ -59,41 +45,27 @@ func (n *MyNetlink) LinkSetVfState(link netlink.Link, vf int, state uint32) erro
 	return netlink.LinkSetVfState(link, vf, state)
 }
 
-type pciUtils interface {
-	getSriovNumVfs(ifName string) (int, error)
-	getVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error)
-	getPciAddress(ifName string, vf int) (string, error)
-}
-
 type pciUtilsImpl struct{}
 
-func (p *pciUtilsImpl) getSriovNumVfs(ifName string) (int, error) {
+func (p *pciUtilsImpl) GetSriovNumVfs(ifName string) (int, error) {
 	return utils.GetSriovNumVfs(ifName)
 }
 
-func (p *pciUtilsImpl) getVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
+func (p *pciUtilsImpl) GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
 	return utils.GetVFLinkNamesFromVFID(pfName, vfID)
 }
 
-func (p *pciUtilsImpl) getPciAddress(ifName string, vf int) (string, error) {
+func (p *pciUtilsImpl) GetPciAddress(ifName string, vf int) (string, error) {
 	return utils.GetPciAddress(ifName, vf)
 }
 
-// Manager provides interface invoke sriov nic related operations
-type Manager interface {
-	SetupVF(conf *types.NetConf, podifName string, cid string, netns ns.NetNS) error
-	ReleaseVF(conf *types.NetConf, podifName string, cid string, netns ns.NetNS) error
-	ResetVFConfig(conf *types.NetConf) error
-	ApplyVFConfig(conf *types.NetConf) error
-}
-
 type sriovManager struct {
-	nLink NetlinkManager
-	utils pciUtils
+	nLink types.NetlinkManager
+	utils types.PciUtils
 }
 
 // NewSriovManager returns an instance of SriovManager
-func NewSriovManager() Manager {
+func NewSriovManager() types.Manager {
 	return &sriovManager{
 		nLink: &MyNetlink{},
 		utils: &pciUtilsImpl{},

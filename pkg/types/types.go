@@ -2,6 +2,8 @@ package types
 
 import (
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/vishvananda/netlink"
 )
 
 // NetConf extends types.NetConf for ib-sriov-cni
@@ -14,4 +16,32 @@ type NetConf struct {
 	ContIFNames string // VF names after in the container; used during deletion
 	GUID        string `json:"guid"`
 	LinkState   string `json:"link_state,omitempty"` // auto|enable|disable
+}
+
+// Manager provides interface invoke sriov nic related operations
+type Manager interface {
+	SetupVF(conf *NetConf, podifName string, cid string, netns ns.NetNS) error
+	ReleaseVF(conf *NetConf, podifName string, cid string, netns ns.NetNS) error
+	ResetVFConfig(conf *NetConf) error
+	ApplyVFConfig(conf *NetConf) error
+}
+
+// mocked netlink interface
+// required for unit tests
+
+// NetlinkManager is an interface to mock nelink library
+type NetlinkManager interface {
+	LinkByName(string) (netlink.Link, error)
+	LinkSetUp(netlink.Link) error
+	LinkSetDown(netlink.Link) error
+	LinkSetNsFd(netlink.Link, int) error
+	LinkSetName(netlink.Link, string) error
+	LinkSetVfState(netlink.Link, int, uint32) error
+}
+
+// PciUtils is interface to help in SR-IOV functions
+type PciUtils interface {
+	GetSriovNumVfs(ifName string) (int, error)
+	GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error)
+	GetPciAddress(ifName string, vf int) (string, error)
 }

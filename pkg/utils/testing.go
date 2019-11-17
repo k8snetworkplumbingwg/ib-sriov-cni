@@ -73,7 +73,7 @@ var ts = tmpSysFs{
 
 // CreateTmpSysFs create mock sysfs for testing
 func CreateTmpSysFs() error {
-	originalRoot, err := os.Open("/")
+	originalRoot, _ := os.Open("/")
 	ts.originalRoot = originalRoot
 
 	tmpdir, err := ioutil.TempDir("/tmp", "ib-sriov-cni-plugin-testfiles-")

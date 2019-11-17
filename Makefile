@@ -34,7 +34,7 @@ IMAGE_BUILD_OPTS += $(DOCKERARGS)
 # Go tools
 GO      = go
 GOFMT   = gofmt
-GOLINT = $(GOBIN)/golint
+GOLINT = $(GOBIN)/golangci-lint
 TIMEOUT = 15
 V = 0
 Q = $(if $(filter 1,$V),,@)
@@ -66,32 +66,20 @@ fmt: ; $(info  running gofmt...) @ ## Run gofmt on all source files
 		$(GOFMT) -l -w $$d/*.go || ret=$$? ; \
 	 done ; exit $$ret
 
-$(GOLINT): | $(BASE) ; $(info  building golint...)
-	$Q go get -u golang.org/x/lint/golint
+$(GOLINT): | $(BASE) ; $(info  building golangci-lint...)
+	$Q go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
-GOCOVMERGE = $(GOBIN)/gocovmerge
-$(GOBIN)/gocovmerge: | $(BASE) ; $(info  building gocovmerge...)
-	$Q go get github.com/wadey/gocovmerge
-
-GOCOV = $(GOBIN)/gocov
-$(GOBIN)/gocov: | $(BASE) ; $(info  building gocov...)
-	$Q go get github.com/axw/gocov/...
-
-GOCOVXML = $(GOBIN)/gocov-xml
-$(GOBIN)/gocov-xml: | $(BASE) ; $(info  building gocov-xml...)
-	$Q go get github.com/AlekSi/gocov-xml
-
-GO2XUNIT = $(GOBIN)/go2xunit
-$(GOBIN)/go2xunit: | $(BASE) ; $(info  building go2xunit...)
-	$Q go get github.com/tebeka/go2xunit
+GOVERALLS = $(GOBIN)/goveralls
+$(GOBIN)/goveralls: | $(BASE) ; $(info  building goveralls...)
+	$Q go get github.com/mattn/goveralls
 
 # Tests
 
 .PHONY: lint
 lint: | $(BASE) $(GOLINT) ; $(info  running golint...) @ ## Run golint
-	$Q cd $(BASE) && ret=0 && for pkg in $(PKGS); do \
-		test -z "$$($(GOLINT) $$pkg | tee /dev/stderr)" || ret=1 ; \
-	 done ; exit $$ret
+	$Q cd $(BASE) && ret=0 && \
+		test -z "$$($(GOLINT) run | tee /dev/stderr)" || ret=1 ; \
+	 exit $$ret
 
 TEST_TARGETS := test-default test-bench test-short test-verbose test-race
 .PHONY: $(TEST_TARGETS) test-xml check test tests
@@ -108,13 +96,10 @@ test-xml: fmt lint | $(BASE) $(GO2XUNIT) ; $(info  running $(NAME:%=% )tests...)
 	$Q cd $(BASE) && 2>&1 $(GO) test -timeout 20s -v $(TESTPKGS) | tee test/tests.output
 	$(GO2XUNIT) -fail -input test/tests.output -output test/tests.xml
 
-COVERAGE_MODE = atomic
-COVERAGE_PROFILE = $(COVERAGE_DIR)/profile.out
-COVERAGE_XML = $(COVERAGE_DIR)/coverage.xml
-COVERAGE_HTML = $(COVERAGE_DIR)/index.html
+COVERAGE_MODE = count
 .PHONY: test-coverage test-coverage-tools
-test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML)
-test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+test-coverage-tools: | $(GOVERALLS)
+test-coverage: COVERAGE_DIR := $(CURDIR)/test
 test-coverage: fmt lint test-coverage-tools | $(BASE) ; $(info  running coverage tests...) @ ## Run coverage tests
 	$Q mkdir -p $(COVERAGE_DIR)/coverage
 	$Q cd $(BASE) && for pkg in $(TESTPKGS); do \
@@ -125,9 +110,6 @@ test-coverage: fmt lint test-coverage-tools | $(BASE) ; $(info  running coverage
 			-covermode=$(COVERAGE_MODE) \
 			-coverprofile="$(COVERAGE_DIR)/coverage/`echo $$pkg | tr "/" "-"`.cover" $$pkg ;\
 	 done
-	$Q $(GOCOVMERGE) $(COVERAGE_DIR)/coverage/*.cover > $(COVERAGE_PROFILE)
-	$Q $(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
-	$Q $(GOCOV) convert $(COVERAGE_PROFILE) | $(GOCOVXML) > $(COVERAGE_XML)
 
 # Container image
 .PHONY: image
@@ -141,7 +123,7 @@ image: | $(BASE) ; $(info Building Docker image...)  ## Build conatiner image
 clean: ; $(info  Cleaning...)	 ## Cleanup everything
 	@rm -rf $(GOPATH)
 	@rm -rf $(BUILDDIR)
-	@rm -rf  test/tests.* test/coverage.*
+	@rm -rf  test
 
 .PHONY: help
 help: ## Show this message

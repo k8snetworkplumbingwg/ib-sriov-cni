@@ -9,7 +9,7 @@
 # InfiniBand SR-IOV CNI plugin
 NIC with [SR-IOV](http://blog.scottlowe.org/2009/12/02/what-is-sr-iov/) capabilities work by introducing the idea of physical functions (PFs) and virtual functions (VFs). 
 
-A PF is used by host and VF configurations are applied through the PF. Each VF can be treated as a separate physical NIC and assigned to one container.
+A PF is used by the host and VF configurations are applied through the PF. Each VF can be treated as a separate physical NIC and assigned to one container.
 
 ## Build
 

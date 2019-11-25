@@ -9,7 +9,7 @@ script:
   - make lint
   - sudo -E env "PATH=$PATH" make test
   - sudo -E env "PATH=$PATH" make test-coverage
-  - for pkg in `ls test/coverage/*.cover`; do goveralls -coverprofile=$pkg -service=travis-ci -repotoken $COVERALLS_TOKEN; done
+  - for pkg in `ls test/coverage/*.cover`; do goveralls -coverprofile=$pkg -service=travis-ci; done
   - make build
   - make image
 

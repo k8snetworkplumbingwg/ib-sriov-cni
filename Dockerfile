@@ -19,3 +19,4 @@ LABEL io.k8s.display-name="InfiniBand SR-IOV CNI"
 ADD ./images/entrypoint.sh /
 
 ENTRYPOINT ["/entrypoint.sh"]
+

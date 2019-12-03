@@ -73,3 +73,17 @@ func (_m *PciUtils) GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, e
 
 	return r0, r1
 }
+
+// RebindVf provides a mock function with given fields: pfName, vfPciAddress
+func (_m *PciUtils) RebindVf(pfName string, vfPciAddress string) error {
+	ret := _m.Called(pfName, vfPciAddress)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(pfName, vfPciAddress)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}

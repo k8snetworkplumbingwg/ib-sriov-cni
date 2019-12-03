@@ -70,6 +70,32 @@ func (p *pciUtilsImpl) GetPciAddress(ifName string, vf int) (string, error) {
 	return utils.GetPciAddress(ifName, vf)
 }
 
+// RebindVf unbind then bind the vf
+func (p *pciUtilsImpl) RebindVf(pfName, vfPciAddress string) error {
+	pfHandle, err := sriovnet.GetPfNetdevHandle(pfName)
+	if err != nil {
+		return err
+	}
+	var vf *sriovnet.VfObj
+	found := false
+	for _, vfObj := range pfHandle.List {
+		if vfObj.PciAddress == vfPciAddress {
+			vf = vfObj
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("failed to find VF %s for PF %s", vfPciAddress, pfName)
+	}
+	if err = sriovnet.UnbindVf(pfHandle, vf); err != nil {
+		return err
+	}
+	if err = sriovnet.BindVf(pfHandle, vf); err != nil {
+		return err
+	}
+	return nil
+}
+
 type sriovManager struct {
 	nLink types.NetlinkManager
 	utils types.PciUtils
@@ -108,28 +134,6 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string
 	// 3. Change netns
 	if err := s.nLink.LinkSetNsFd(linkObj, int(netns.Fd())); err != nil {
 		return fmt.Errorf("failed to move IF %s to netns: %q", tempName, err)
-	}
-
-	// 4. Set VF GUID
-	if conf.GUID != "" {
-		if len(conf.GUID) < 8 {
-			return fmt.Errorf("invalid guid %s", conf.GUID)
-		}
-		hwAddr, err := net.ParseMAC(conf.GUID)
-		if err != nil {
-			return fmt.Errorf("failed to parse Vf user's config GUID %s: %v", conf.GUID, err)
-		}
-		pfLink, err := s.nLink.LinkByName(conf.Master)
-		if err != nil {
-			return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
-		}
-		if err = netlink.LinkSetVfNodeGUID(pfLink, conf.VFID, hwAddr); err != nil {
-			return fmt.Errorf("failed to set vf port guid: %v", err)
-		}
-
-		if err = netlink.LinkSetVfPortGUID(pfLink, conf.VFID, hwAddr); err != nil {
-			return fmt.Errorf("failed to set vf port guid: %v", err)
-		}
 	}
 
 	if err := netns.Do(func(_ ns.NetNS) error {
@@ -200,42 +204,6 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
 	}
 
-	// Set link guid
-	if conf.GUID != "" {
-		guid, err := net.ParseMAC(conf.GUID)
-		if err != nil {
-			return fmt.Errorf("failed to parse guid %s: %v", conf.GUID, err)
-		}
-		if err = s.nLink.LinkSetVfNodeGUID(pfLink, conf.VFID, guid); err != nil {
-			return fmt.Errorf("failed to add node guid %s: %v", guid, err)
-		}
-		if err = s.nLink.LinkSetVfPortGUID(pfLink, conf.VFID, guid); err != nil {
-			return fmt.Errorf("failed to add port guid %s: %v", guid, err)
-		}
-		// unbind vf then bind it to apply the new guid
-		pfHandle, err := sriovnet.GetPfNetdevHandle(conf.Master)
-		if err != nil {
-			return err
-		}
-		var vf *sriovnet.VfObj
-		found := false
-		for _, vfObj := range pfHandle.List {
-			if vfObj.PciAddress == conf.DeviceID {
-				vf = vfObj
-				found = true
-			}
-		}
-		if !found {
-			return fmt.Errorf("failed to find VF %s for PF %s", conf.DeviceID, conf.Master)
-		}
-		if err = sriovnet.UnbindVf(pfHandle, vf); err != nil {
-			return err
-		}
-		if err = sriovnet.BindVf(pfHandle, vf); err != nil {
-			return err
-		}
-	}
-
 	// Set link state
 	if conf.LinkState != "" {
 		var state uint32
@@ -252,6 +220,25 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 		}
 		if err = s.nLink.LinkSetVfState(pfLink, conf.VFID, state); err != nil {
 			return fmt.Errorf("failed to set vf %d link state to %d: %v", conf.VFID, state, err)
+		}
+	}
+
+	// Set link guid
+	if conf.GUID != "" {
+		if !utils.IsValidGUID(conf.GUID) {
+			return fmt.Errorf("invalid guid %s", conf.GUID)
+		}
+		// save link guid
+		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+		if err != nil {
+			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+		}
+
+		conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
+
+		// Set link guid
+		if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
+			return err
 		}
 	}
 
@@ -276,5 +263,36 @@ func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
 		}
 	}
 
+	// Reset link guid
+	if conf.HostIFGUID != "" {
+		// if the host guid is all zeros which is invalid guid replace it with all F guid
+		// This happen when create a VF it guid is all zeros
+		if utils.IsAllZeroGUID(conf.HostIFGUID) {
+			conf.HostIFGUID = "FF:FF:FF:FF:FF:FF:FF:FF"
+		}
+
+		if err := s.setVfGUID(conf, pfLink, conf.HostIFGUID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *sriovManager) setVfGUID(conf *types.NetConf, pfLink netlink.Link, guidAddr string) error {
+	guid, err := net.ParseMAC(guidAddr)
+	if err != nil {
+		return fmt.Errorf("failed to parse guid %s: %v", guidAddr, err)
+	}
+	if err = s.nLink.LinkSetVfNodeGUID(pfLink, conf.VFID, guid); err != nil {
+		return fmt.Errorf("failed to add node guid %s: %v", guid, err)
+	}
+	if err = s.nLink.LinkSetVfPortGUID(pfLink, conf.VFID, guid); err != nil {
+		return fmt.Errorf("failed to add port guid %s: %v", guid, err)
+	}
+	// unbind vf then bind it to apply the guid
+	if err = s.utils.RebindVf(conf.Master, conf.DeviceID); err != nil {
+		return err
+	}
 	return nil
 }

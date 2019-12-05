@@ -1,6 +1,7 @@
 package sriov
 
 import (
+	"errors"
 	"github.com/Mellanox/ib-sriov-cni/pkg/types"
 	"github.com/Mellanox/ib-sriov-cni/pkg/types/mocks"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -60,8 +61,6 @@ var _ = Describe("Sriov", func() {
 			Expect(err).NotTo(HaveOccurred())
 			mocked := &mocks.NetlinkManager{}
 
-			Expect(err).NotTo(HaveOccurred())
-
 			fakeLink := &FakeLink{netlink.LinkAttrs{
 				Index: 1000,
 				Name:  "dummylink",
@@ -75,6 +74,116 @@ var _ = Describe("Sriov", func() {
 			sm := sriovManager{nLink: mocked}
 			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
 			Expect(err).NotTo(HaveOccurred())
+		})
+		It("Assuming non existing interface", func() {
+			var targetNetNS ns.NetNS
+			targetNetNS, err := testutils.NewNS()
+			defer func() {
+				if targetNetNS != nil {
+					targetNetNS.Close()
+				}
+			}()
+			Expect(err).NotTo(HaveOccurred())
+			mocked := &mocks.NetlinkManager{}
+
+			mocked.On("LinkByName", mock.AnythingOfType("string")).Return(nil, errors.New("not fount"))
+			sm := sriovManager{nLink: mocked}
+			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Assuming existing interface not able to set down", func() {
+			var targetNetNS ns.NetNS
+			targetNetNS, err := testutils.NewNS()
+			defer func() {
+				if targetNetNS != nil {
+					targetNetNS.Close()
+				}
+			}()
+			Expect(err).NotTo(HaveOccurred())
+			mocked := &mocks.NetlinkManager{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{
+				Index: 1000,
+				Name:  "dummylink",
+			}}
+
+			mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+			mocked.On("LinkSetDown", fakeLink).Return(errors.New("failed"))
+			sm := sriovManager{nLink: mocked}
+			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Assuming failed to change name", func() {
+			var targetNetNS ns.NetNS
+			targetNetNS, err := testutils.NewNS()
+			defer func() {
+				if targetNetNS != nil {
+					targetNetNS.Close()
+				}
+			}()
+			Expect(err).NotTo(HaveOccurred())
+			mocked := &mocks.NetlinkManager{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{
+				Index: 1000,
+				Name:  "dummylink",
+			}}
+
+			mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+			mocked.On("LinkSetDown", fakeLink).Return(nil)
+			mocked.On("LinkSetName", fakeLink, mock.Anything).Return(errors.New("failed"))
+			sm := sriovManager{nLink: mocked}
+			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Assuming failed to move interface", func() {
+			var targetNetNS ns.NetNS
+			targetNetNS, err := testutils.NewNS()
+			defer func() {
+				if targetNetNS != nil {
+					targetNetNS.Close()
+				}
+			}()
+			Expect(err).ToNot(HaveOccurred())
+			mocked := &mocks.NetlinkManager{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{
+				Index: 1000,
+				Name:  "dummylink",
+			}}
+
+			mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+			mocked.On("LinkSetDown", fakeLink).Return(nil)
+			mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
+			mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(errors.New("failed"))
+			sm := sriovManager{nLink: mocked}
+			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Assuming failed to set interface up after moving", func() {
+			var targetNetNS ns.NetNS
+			targetNetNS, err := testutils.NewNS()
+			defer func() {
+				if targetNetNS != nil {
+					targetNetNS.Close()
+				}
+			}()
+			Expect(err).NotTo(HaveOccurred())
+			mocked := &mocks.NetlinkManager{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{
+				Index: 1000,
+				Name:  "dummylink",
+			}}
+
+			mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+			mocked.On("LinkSetDown", fakeLink).Return(nil)
+			mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
+			mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(nil)
+			mocked.On("LinkSetUp", fakeLink).Return(errors.New("failed"))
+			sm := sriovManager{nLink: mocked}
+			err = sm.SetupVF(netconf, podifName, contID, targetNetNS)
+			Expect(err).To(HaveOccurred())
 		})
 		Context("Checking ReleaseVF function", func() {
 			var (
@@ -110,11 +219,84 @@ var _ = Describe("Sriov", func() {
 				mocked.On("LinkSetDown", fakeLink).Return(nil)
 				mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
 				mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(nil)
-				mocked.On("LinkSetUp", fakeLink).Return(nil)
 				sm := sriovManager{nLink: mocked}
 				err = sm.ReleaseVF(netconf, podifName, contID, targetNetNS)
 				Expect(err).NotTo(HaveOccurred())
 			})
+			It("Assuming non existing interface", func() {
+				var targetNetNS ns.NetNS
+				targetNetNS, err := testutils.NewNS()
+				defer func() {
+					if targetNetNS != nil {
+						targetNetNS.Close()
+					}
+				}()
+				Expect(err).NotTo(HaveOccurred())
+				mocked := &mocks.NetlinkManager{}
+
+				mocked.On("LinkByName", mock.AnythingOfType("string")).Return(nil, errors.New("not found"))
+				sm := sriovManager{nLink: mocked}
+				err = sm.ReleaseVF(netconf, podifName, contID, targetNetNS)
+				Expect(err).To(HaveOccurred())
+			})
+			It("Assuming failed to set interface down", func() {
+				var targetNetNS ns.NetNS
+				targetNetNS, err := testutils.NewNS()
+				defer func() {
+					if targetNetNS != nil {
+						targetNetNS.Close()
+					}
+				}()
+				Expect(err).NotTo(HaveOccurred())
+				mocked := &mocks.NetlinkManager{}
+				fakeLink := &FakeLink{netlink.LinkAttrs{Index: 1000, Name: "dummylink"}}
+
+				mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+				mocked.On("LinkSetDown", fakeLink).Return(errors.New("failed"))
+				sm := sriovManager{nLink: mocked}
+				err = sm.ReleaseVF(netconf, podifName, contID, targetNetNS)
+				Expect(err).To(HaveOccurred())
+			})
+			It("Assuming failed to move interface", func() {
+				var targetNetNS ns.NetNS
+				targetNetNS, err := testutils.NewNS()
+				defer func() {
+					if targetNetNS != nil {
+						targetNetNS.Close()
+					}
+				}()
+				Expect(err).NotTo(HaveOccurred())
+				mocked := &mocks.NetlinkManager{}
+				fakeLink := &FakeLink{netlink.LinkAttrs{Index: 1000, Name: "dummylink"}}
+
+				mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+				mocked.On("LinkSetDown", fakeLink).Return(nil)
+				mocked.On("LinkSetName", fakeLink, mock.Anything).Return(errors.New("failed"))
+				sm := sriovManager{nLink: mocked}
+				err = sm.ReleaseVF(netconf, podifName, contID, targetNetNS)
+				Expect(err).To(HaveOccurred())
+			})
+			It("Assuming existing interface", func() {
+				var targetNetNS ns.NetNS
+				targetNetNS, err := testutils.NewNS()
+				defer func() {
+					if targetNetNS != nil {
+						targetNetNS.Close()
+					}
+				}()
+				Expect(err).NotTo(HaveOccurred())
+				mocked := &mocks.NetlinkManager{}
+				fakeLink := &FakeLink{netlink.LinkAttrs{Index: 1000, Name: "dummylink"}}
+
+				mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+				mocked.On("LinkSetDown", fakeLink).Return(nil)
+				mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
+				mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(errors.New("failed"))
+				sm := sriovManager{nLink: mocked}
+				err = sm.ReleaseVF(netconf, podifName, contID, targetNetNS)
+				Expect(err).To(HaveOccurred())
+			})
+
 		})
 	})
 })

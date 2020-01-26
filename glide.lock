@@ -1,5 +1,5 @@
-hash: 1b60a527069f86471cc064ca830b33b3cd135d8a556b3651bedfe7ae7ea67e9b
-updated: 2019-11-17T16:50:11.89555515+02:00
+hash: bafd5d238fab00da8838803fac6b3613843c9859f797c1fe4633bb78199250dd
+updated: 2020-01-26T15:55:41.258732597+02:00
 imports:
 - name: github.com/containernetworking/cni
   version: dc953e2fd91f9bc624b03cf9ea3706796bfee920
@@ -24,6 +24,10 @@ imports:
   version: 78b5fff24e6df8886ef8eca9411f683a884349a5
   subpackages:
   - iptables
+- name: github.com/davecgh/go-spew
+  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
+  subpackages:
+  - spew
 - name: github.com/Mellanox/sriovnet
   version: fbd1a9d10d0113df9e2de497f37dec9535f2ff7c
 - name: github.com/onsi/ginkgo
@@ -57,17 +61,23 @@ imports:
   - matchers/support/goraph/node
   - matchers/support/goraph/util
   - types
+- name: github.com/pmezard/go-difflib
+  version: 5d4384ee4fb2527b0a1256a821ebfc92f91efefc
+  subpackages:
+  - difflib
 - name: github.com/safchain/ethtool
   version: 42ed695e3de80b9d695f280295fd7994639f209d
 - name: github.com/satori/go.uuid
   version: b2ce2384e17bbe0c6d34077efa39dbab3e09123b
+- name: github.com/stretchr/objx
+  version: 35313a95ee26395aa17d366c71a2ccf788fa69b6
 - name: github.com/stretchr/testify
   version: 221dbe5ed46703ee255b1da0dec05086f5035f62
   subpackages:
   - assert
   - mock
 - name: github.com/vishvananda/netlink
-  version: 07ace697bea4b7641fbc6dcf7c90432c6b8bea5c
+  version: f049be6f391489d3f374498fe0c8df8449258372
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
@@ -76,16 +86,6 @@ imports:
   version: fae7ac547cb717d141c433a2a173315e216b64c4
   subpackages:
   - unix
-testImports:
-- name: github.com/davecgh/go-spew
-  version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
-  subpackages:
-  - spew
-- name: github.com/pmezard/go-difflib
-  version: 5d4384ee4fb2527b0a1256a821ebfc92f91efefc
-  subpackages:
-  - difflib
-- name: github.com/stretchr/objx
-  version: 35313a95ee26395aa17d366c71a2ccf788fa69b6
 - name: gopkg.in/yaml.v2
-  version: f90ceb4f409096b60e2e9076b38b304b8246e5fa
+  version: 53403b58ad1b561927d19068c655246f2db79d48
+testImports: []

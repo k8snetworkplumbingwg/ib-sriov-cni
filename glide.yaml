@@ -46,7 +46,7 @@ import:
   - matchers/support/goraph/util
   - types
 - package: github.com/vishvananda/netlink
-  version: 07ace697bea4b7641fbc6dcf7c90432c6b8bea5c
+  version: f049be6f391489d3f374498fe0c8df8449258372
   subpackages:
   - nl
 - package: github.com/vishvananda/netns

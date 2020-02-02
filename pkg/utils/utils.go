@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -208,4 +209,19 @@ func CleanCachedNetConf(cRefPath string) error {
 		return fmt.Errorf("error removing NetConf file %s: %q", cRefPath, err)
 	}
 	return nil
+}
+
+// IsValidGUID check if the guild is valid
+func IsValidGUID(guid string) bool {
+	if IsAllZeroGUID(guid) {
+		return false
+	}
+
+	match, _ := regexp.MatchString("^([0-9a-fA-F]{2}:){7}[0-9a-fA-F]{2}$", guid)
+	return match
+}
+
+// IsAllZeroGUID check if the guid is all zero which is invalid guid
+func IsAllZeroGUID(guid string) bool {
+	return guid == "00:00:00:00:00:00:00:00"
 }

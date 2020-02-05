@@ -24,7 +24,7 @@ spec:
       containers:
         - name: kube-ib-sriov-cni
           image: mellanox/ib-sriov-cni
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           resources:
@@ -68,7 +68,7 @@ spec:
       containers:
         - name: kube-ib-sriov-cni
           image: mellanox/ib-sriov-cni:ppc64le
-          imagePullPolicy: Never
+          imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
           resources:

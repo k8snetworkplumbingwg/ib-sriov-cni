@@ -1,5 +1,5 @@
 ---
-apiVersion: apps/v1
+apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
   name: kube-ib-sriov-cni-ds-amd64
@@ -8,15 +8,11 @@ metadata:
     tier: node
     app: ib-sriov-cni
 spec:
-  selector:
-    matchLabels:
-      name: ib-sriov-cni
   template:
     metadata:
       labels:
         tier: node
         app: ib-sriov-cni
-        name: ib-sriov-cni
     spec:
       hostNetwork: true
       nodeSelector:
@@ -47,7 +43,7 @@ spec:
             path: /opt/cni/bin
 
 ---
-apiVersion: apps/v1
+apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
   name: kube-ib-sriov-cni-ds-ppc64le
@@ -56,15 +52,11 @@ metadata:
     tier: node
     app: ib-sriov-cni
 spec:
-  selector:
-    matchLabels:
-      name: ib-sriov-cni
   template:
     metadata:
       labels:
         tier: node
         app: ib-sriov-cni
-        name: ib-sriov-cni
     spec:
       hostNetwork: true
       nodeSelector:

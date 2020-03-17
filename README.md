@@ -196,6 +196,7 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 * `guid` (string, optional): InfiniBand Guid for VF.
 * `pkey` (string, optional): InfiniBand pkey for VF, this filed is used by [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes) to add pkey with guid to InfiniBand subnet manager client e.g. [Mellanox UFM](https://www.mellanox.com/products/management-software/ufm), [OpenSM](https://docs.mellanox.com/display/MLNXOFEDv461000/OpenSM).
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network, `dhcp` is not supported.
+* `link_state` (dictionary, optional): Enforces link state for the VF. Allowed values: auto, enable, disable.
 
 
 ## Usage
@@ -206,8 +207,9 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
     "cniVersion": "0.3.1",
     "name": "mynet",
     "type": "ib-sriov-cni",
-        "deviceID": "0000:03:02.0",
-        "ipam": {
+    "deviceID": "0000:03:02.0",
+    "link_state": "enable",
+    "ipam": {
                 "type": "host-local",
                 "subnet": "10.56.217.0/24",
                 "rangeStart": "10.56.217.171",

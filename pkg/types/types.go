@@ -13,12 +13,15 @@ type NetConf struct {
 	Master      string
 	DeviceID    string `json:"deviceID"` // PCI address of a VF in valid sysfs format
 	VFID        int
-	HostIFNames string // VF netdevice name(s)
-	HostIFGUID  string // VF netdevice GUID
-	ContIFNames string // VF names after in the container; used during deletion
-	GUID        string `json:"guid"`
+	HostIFNames string            // VF netdevice name(s)
+	HostIFGUID  string            // VF netdevice GUID
+	ContIFNames string            // VF names after in the container; used during deletion
+	GUID        string `json:"-"` // VF Guid is allowed only read from cni-args of network attachment
 	PKey        string `json:"pkey"`
 	LinkState   string `json:"link_state,omitempty"` // auto|enable|disable
+	Args        struct {
+		CNI map[string]string `json:"cni"`
+	} `json:"args"`
 }
 
 // Manager provides interface invoke sriov nic related operations

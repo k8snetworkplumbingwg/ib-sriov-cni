@@ -17,6 +17,11 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+const (
+	infiniBandAnnotation = "mellanox.infiniband.app"
+	configuredInfiniBand = "configured"
+)
+
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -29,6 +34,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("InfiniBand SRI-OV CNI failed to load netconf: %v", err)
 	}
+
+	cniArgs := netConf.Args.CNI
+	if cniArgs[infiniBandAnnotation] != configuredInfiniBand {
+		return fmt.Errorf("InfiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
+			infiniBandAnnotation, configuredInfiniBand)
+	}
+
+	guid, ok := cniArgs["guid"]
+	if !ok {
+		return fmt.Errorf("InfiniBand SRIOV-CNI failed, no guid found from cni-args, please check mellanox ib-kubernets")
+	}
+
+	netConf.GUID = guid
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {

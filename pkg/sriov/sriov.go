@@ -224,22 +224,20 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 	}
 
 	// Set link guid
-	if conf.GUID != "" {
-		if !utils.IsValidGUID(conf.GUID) {
-			return fmt.Errorf("invalid guid %s", conf.GUID)
-		}
-		// save link guid
-		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
-		if err != nil {
-			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
-		}
+	if !utils.IsValidGUID(conf.GUID) {
+		return fmt.Errorf("invalid guid %s", conf.GUID)
+	}
+	// save link guid
+	vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+	if err != nil {
+		return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+	}
 
-		conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
+	conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
 
-		// Set link guid
-		if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
-			return err
-		}
+	// Set link guid
+	if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
+		return err
 	}
 
 	return nil
@@ -264,16 +262,14 @@ func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
 	}
 
 	// Reset link guid
-	if conf.HostIFGUID != "" {
-		// if the host guid is all zeros which is invalid guid replace it with all F guid
-		// This happen when create a VF it guid is all zeros
-		if utils.IsAllZeroGUID(conf.HostIFGUID) {
-			conf.HostIFGUID = "FF:FF:FF:FF:FF:FF:FF:FF"
-		}
+	// if the host guid is all zeros which is invalid guid replace it with all F guid
+	// This happen when create a VF it guid is all zeros
+	if utils.IsAllZeroGUID(conf.HostIFGUID) {
+		conf.HostIFGUID = "FF:FF:FF:FF:FF:FF:FF:FF"
+	}
 
-		if err := s.setVfGUID(conf, pfLink, conf.HostIFGUID); err != nil {
-			return err
-		}
+	if err := s.setVfGUID(conf, pfLink, conf.HostIFGUID); err != nil {
+		return err
 	}
 
 	return nil

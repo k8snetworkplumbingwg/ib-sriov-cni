@@ -39,7 +39,7 @@ func LoadConf(bytes []byte) (*types.NetConf, error) {
 	// Get interface name
 	hostIFNames, err := utils.GetVFLinkNames(n.DeviceID)
 	if err != nil || hostIFNames == "" {
-		return nil, fmt.Errorf("LoadConf(): failed to detect if VF %s name %q", n.DeviceID, err)
+		return nil, fmt.Errorf("LoadConf(): failed to detect VF %s name with error, %q", n.DeviceID, err)
 	}
 
 	n.HostIFNames = hostIFNames

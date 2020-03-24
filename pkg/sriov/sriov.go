@@ -2,14 +2,14 @@ package sriov
 
 import (
 	"fmt"
-	"github.com/Mellanox/sriovnet"
 	"net"
 
+	"github.com/Mellanox/sriovnet"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/vishvananda/netlink"
 
 	"github.com/Mellanox/ib-sriov-cni/pkg/types"
 	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
-	"github.com/vishvananda/netlink"
 )
 
 // MyNetlink NetlinkManager
@@ -111,7 +111,11 @@ func NewSriovManager() types.Manager {
 
 // SetupVF sets up a VF in Pod netns
 func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string, netns ns.NetNS) error {
-	linkName := conf.HostIFNames
+	// Get vf name since it may have been changed after the rebind in ApplyVFConfig which is called before
+	linkName, err := utils.GetVFLinkNames(conf.DeviceID)
+	if err != nil || linkName == "" {
+		return fmt.Errorf("failed to get VF %s name after rebind with error, %q", conf.DeviceID, err)
+	}
 
 	linkObj, err := s.nLink.LinkByName(linkName)
 	if err != nil {
@@ -119,7 +123,7 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string
 	}
 
 	// tempName used as intermediary name to avoid name conflicts
-	tempName := fmt.Sprintf("%s%d", linkName, linkObj.Attrs().Index)
+	tempName := fmt.Sprintf("vfdev%d", linkObj.Attrs().Index)
 
 	// 1. Set link down
 	if err := s.nLink.LinkSetDown(linkObj); err != nil {

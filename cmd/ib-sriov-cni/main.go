@@ -45,8 +45,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if !ok {
 		return fmt.Errorf("InfiniBand SRIOV-CNI failed, no guid found from cni-args, please check mellanox ib-kubernets")
 	}
-
 	netConf.GUID = guid
+
+	if err = config.LoadDeviceInfo(netConf); err!= nil {
+		return fmt.Errorf("failed to device specific information. %s", err)
+	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {

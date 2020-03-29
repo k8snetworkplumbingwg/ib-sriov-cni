@@ -25,24 +25,6 @@ var _ = Describe("Config", func() {
 			_, err := LoadConf(conf)
 			Expect(err).NotTo(HaveOccurred())
 		})
-		It("Assuming incorrect config file - not existing DeviceID", func() {
-			conf := []byte(`{
-        "name": "mynet",
-        "type": "ib-sriov-cni",
-        "deviceID": "0000:af:06.3",
-        "vf": 0,
-        "ipam": {
-            "type": "host-local",
-            "subnet": "10.55.206.0/26",
-            "routes": [
-                { "dst": "0.0.0.0/0" }
-            ],
-            "gateway": "10.55.206.1"
-        }
-                        }`)
-			_, err := LoadConf(conf)
-			Expect(err).To(HaveOccurred())
-		})
 		It("Assuming incorrect config file - broken json", func() {
 			conf := []byte(`{
         "name": "mynet"

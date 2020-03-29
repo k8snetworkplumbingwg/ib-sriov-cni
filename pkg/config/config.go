@@ -23,33 +23,36 @@ func LoadConf(bytes []byte) (*types.NetConf, error) {
 		return nil, fmt.Errorf("LoadConf(): failed to load netconf: %v", err)
 	}
 
-	// DeviceID takes precedence; if we are given a VF pciaddr then work from there
-	if n.DeviceID != "" {
-		// Get rest of the VF information
-		pfName, vfID, err := getVfInfo(n.DeviceID)
-		if err != nil {
-			return nil, fmt.Errorf("LoadConf(): failed to get VF information: %q", err)
-		}
-		n.VFID = vfID
-		n.Master = pfName
-	} else {
-		return nil, fmt.Errorf("LoadConf(): VF pci addr is required")
-	}
-
-	// Get interface name
-	hostIFNames, err := utils.GetVFLinkNames(n.DeviceID)
-	if err != nil || hostIFNames == "" {
-		return nil, fmt.Errorf("LoadConf(): failed to detect VF %s name with error, %q", n.DeviceID, err)
-	}
-
-	n.HostIFNames = hostIFNames
-
 	// validate that link state is one of supported values
 	if n.LinkState != "" && n.LinkState != "auto" && n.LinkState != "enable" && n.LinkState != "disable" {
 		return nil, fmt.Errorf("LoadConf(): invalid link_state value: %s", n.LinkState)
 	}
-
 	return n, nil
+}
+
+// Load device specific information into netConf
+func LoadDeviceInfo(netConf *types.NetConf) error {
+	// DeviceID takes precedence; if we are given a VF pciaddr then work from there
+	if netConf.DeviceID != "" {
+		// Get rest of the VF information
+		pfName, vfID, err := getVfInfo(netConf.DeviceID)
+		if err != nil {
+			return fmt.Errorf("LoadConf(): failed to get VF information: %q", err)
+		}
+		netConf.VFID = vfID
+		netConf.Master = pfName
+	} else {
+		return fmt.Errorf("LoadConf(): VF pci addr is required")
+	}
+
+	// Get interface name
+	hostIFNames, err := utils.GetVFLinkNames(netConf.DeviceID)
+	if err != nil || hostIFNames == "" {
+		return fmt.Errorf("LoadConf(): failed to detect VF %s name with error, %q", netConf.DeviceID, err)
+	}
+
+	netConf.HostIFNames = hostIFNames
+	return nil
 }
 
 func getVfInfo(vfPci string) (string, int, error) {

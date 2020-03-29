@@ -1,25 +1,29 @@
 package types
 
 import (
+	"net"
+
+	rdmatypes "github.com/Mellanox/rdma-cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
-	"net"
 )
 
 // NetConf extends types.NetConf for ib-sriov-cni
 type NetConf struct {
 	types.NetConf
-	Master      string
-	DeviceID    string `json:"deviceID"` // PCI address of a VF in valid sysfs format
-	VFID        int
-	HostIFNames string            // VF netdevice name(s)
-	HostIFGUID  string            // VF netdevice GUID
-	ContIFNames string            // VF names after in the container; used during deletion
-	GUID        string `json:"-"` // VF Guid is allowed only read from cni-args of network attachment
-	PKey        string `json:"pkey"`
-	LinkState   string `json:"link_state,omitempty"` // auto|enable|disable
-	Args        struct {
+	Master       string
+	DeviceID     string `json:"deviceID"` // PCI address of a VF in valid sysfs format
+	VFID         int
+	HostIFNames  string // VF netdevice name(s)
+	HostIFGUID   string // VF netdevice GUID
+	ContIFNames  string // VF names after in the container; used during deletion
+	GUID         string `json:"-"` // VF Guid is allowed only read from cni-args of network attachment
+	PKey         string `json:"pkey"`
+	LinkState    string `json:"link_state,omitempty"` // auto|enable|disable
+	RdmaIso      bool   `json:"rdmaIsolation,omitempty"`
+	RdmaNetState rdmatypes.RdmaNetState
+	Args         struct {
 		CNI map[string]string `json:"cni"`
 	} `json:"args"`
 }

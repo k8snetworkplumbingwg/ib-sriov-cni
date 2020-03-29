@@ -47,8 +47,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	netConf.GUID = guid
 
-	if err = config.LoadDeviceInfo(netConf); err!= nil {
-		return fmt.Errorf("failed to device specific information. %s", err)
+	if netConf.RdmaIso {
+		err = utils.EnsureRdmaSystemMode()
+		if err != nil {
+			return err
+		}
 	}
 
 	netns, err := ns.GetNS(args.Netns)
@@ -57,9 +60,36 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
+	if err = config.LoadDeviceInfo(netConf); err != nil {
+		return fmt.Errorf("failed to get device specific information. %v", err)
+	}
+
 	sm := sriov.NewSriovManager()
 	if err := sm.ApplyVFConfig(netConf); err != nil {
 		return fmt.Errorf("InfiniBand SRI-OV CNI failed to configure VF %q", err)
+	}
+
+	// Note(adrianc): We do this here as ApplyVFCOnfig is rebinding the VF, causing the RDMA device to be recreated.
+	// We do this here due to some un-intuitive kernel behaviour (which i hope will change), moving an RDMA device
+	// to namespace causes all of its associated ULP devices (IPoIB) to be recreated in the default namespace,
+	// hence SetupVF needs to occur after moving RDMA device to namespace
+	if netConf.RdmaIso {
+		var rdmaDev string
+		rdmaDev, err = utils.MoveRdmaDevToNsPci(netConf.DeviceID, netns)
+		if err != nil {
+			return err
+		}
+		// Save RDMA state
+		netConf.RdmaNetState.DeviceID = netConf.DeviceID
+		netConf.RdmaNetState.SandboxRdmaDevName = rdmaDev
+		netConf.RdmaNetState.ContainerRdmaDevName = rdmaDev
+		// restore RDMA device back to default namespace in case of error
+		// Note(adrianc): as there is no logging, we have little visibility if the restore operation failed.
+		defer func() {
+			if err != nil {
+				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
+			}
+		}()
 	}
 
 	result := &current.Result{}
@@ -183,10 +213,24 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
+	// Move RDMA device to default namespace
+	// Note(adrianc): Due to some un-intuitive kernel behaviour (which i hope will change), moving an RDMA device
+	// to namespace causes all of its associated ULP devices (IPoIB) to be recreated in the default namespace.
+	// we strategically place this here to allow:
+	//   1. netedv cleanup during ReleaseVF.
+	//   2. rdma dev netns cleanup as ResetVFConfig will rebind the VF.
+	// Doing anything would have yielded the same results however ResetVFConfig will eventually not trigger VF rebind.
+	if netConf.RdmaIso {
+		err = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to restore RDMA device %s to default namespace. %v", netConf.RdmaNetState.ContainerRdmaDevName, err)
+		}
+	}
+
 	if err := sm.ResetVFConfig(netConf); err != nil {
 		return fmt.Errorf("cmdDel() error reseting VF: %q", err)
 	}
-
 	return nil
 }
 

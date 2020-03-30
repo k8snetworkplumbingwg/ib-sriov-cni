@@ -1,8 +1,8 @@
    * [InfiniBand SR-IOV CNI plugin](#infiniband-sr-iov-cni-plugin)
       * [Build](#build)
       * [Enable SR-IOV](#enable-sr-iov)
-         * [Using Upstream Mstflint] (#using-upstream-mstflint)
-         * [Using Mellanox OFED] (#using-mellanox-ofed)
+         * [Using Upstream Mstflint](#using-upstream-mstflint)
+         * [Using Mellanox OFED](#using-mellanox-ofed)
       * [Configuration reference](#configuration-reference)
       * [Usage](#usage)
 

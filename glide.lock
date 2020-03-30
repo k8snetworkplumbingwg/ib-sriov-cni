@@ -1,8 +1,8 @@
-hash: bafd5d238fab00da8838803fac6b3613843c9859f797c1fe4633bb78199250dd
-updated: 2020-01-26T15:55:41.258732597+02:00
+hash: 73f6fae8c35aa774fa0ac7c696d447ab79693e332160118b8c4251568f48e2d8
+updated: 2020-03-30T14:17:39.112566811+03:00
 imports:
 - name: github.com/containernetworking/cni
-  version: dc953e2fd91f9bc624b03cf9ea3706796bfee920
+  version: 4cfb7b568922a3c79a23e438dc52fe537fc9687e
   subpackages:
   - pkg/invoke
   - pkg/skel
@@ -28,6 +28,13 @@ imports:
   version: d8f796af33cc11cb798c1aaeb27a4ebc5099927d
   subpackages:
   - spew
+- name: github.com/Mellanox/rdma-cni
+  version: e45d7907c68b0a2e97c96d2424c70d44569029cb
+  subpackages:
+  - pkg/rdma
+  - pkg/types
+- name: github.com/Mellanox/rdmamap
+  version: c857d7164898302741e379a69d9f73255aabe78a
 - name: github.com/Mellanox/sriovnet
   version: fbd1a9d10d0113df9e2de497f37dec9535f2ff7c
 - name: github.com/onsi/ginkgo
@@ -72,7 +79,7 @@ imports:
 - name: github.com/stretchr/objx
   version: 35313a95ee26395aa17d366c71a2ccf788fa69b6
 - name: github.com/stretchr/testify
-  version: 221dbe5ed46703ee255b1da0dec05086f5035f62
+  version: 3ebf1ddaeb260c4b1ae502a01c7844fa8c1fa0e9
   subpackages:
   - assert
   - mock
@@ -81,7 +88,7 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/sys
   version: fae7ac547cb717d141c433a2a173315e216b64c4
   subpackages:

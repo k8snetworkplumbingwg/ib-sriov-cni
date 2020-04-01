@@ -8,19 +8,7 @@ Typically you'd build this from the root of your InfiniBand SR-IOV CNI clone, an
 $ DOCKERFILE=Dockerfile TAG=mellanox/ib-sriov-cni make image
 ```
 
----
-
-## Daemonset deployment
-
-You may wish to deploy SR-IOV CNI as a daemonset, you can do so by starting with the example Daemonset shown here:
-
-```
-$ kubectl create -f ./images/ib-sriov-cni-daemonset.yaml
-```
-
 Note: The likely best practice here is to build your own image given the Dockerfile, and then push it to your preferred registry, and change the `image` fields in the Daemonset YAML to reference that image.
-
----
 
 ### Development notes
 

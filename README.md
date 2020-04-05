@@ -5,6 +5,7 @@
          * [Using Mellanox OFED](#using-mellanox-ofed)
       * [Configuration reference](#configuration-reference)
       * [Usage](#usage)
+      * [Limitations](limitations)
 
 # InfiniBand SR-IOV CNI plugin
 NIC with [SR-IOV](http://blog.scottlowe.org/2009/12/02/what-is-sr-iov/) capabilities work by introducing the idea of physical functions (PFs) and virtual functions (VFs). 
@@ -227,3 +228,12 @@ about the system requirements to support this mode of operation can be found [he
 
 EOF
 ```
+
+## Limitations
+### RDMA workloads utilizing RDMA Connection Manager (CM)
+
+When RDMA isolation is enabled, Pods creation/deletion cannot occur in parallel.
+This is due to the fact that moving RDMA device to namespace and rebinding
+different VF may rename RDMA character devices under /dev/infiniband.
+This can cause mismatch between the RDMA character devices and RDMA
+device passed to the Pods which leads to traffic failure.

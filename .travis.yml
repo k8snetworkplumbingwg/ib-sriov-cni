@@ -5,12 +5,10 @@ before_script:
   - go get github.com/mattn/goveralls
 
 script:
-
+  - make fmt
   - make lint
-  - sudo -E env "PATH=$PATH" make test
-  - sudo -E env "PATH=$PATH" make test-coverage
-  - for pkg in `ls test/coverage/*.cover`; do goveralls -coverprofile=$pkg -service=travis-ci; done
-  - make build
+  - make test-coverage
+  - goveralls -coverprofile=ib-sriov-cni.cover -service=travis-ci
   - make image
 
 before_deploy:

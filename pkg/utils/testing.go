@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 func check(e error) {
@@ -82,7 +81,6 @@ func CreateTmpSysFs() error {
 	}
 
 	ts.dirRoot = tmpdir
-	//syscall.Chroot(ts.dirRoot)
 
 	for _, dir := range ts.dirList {
 		if err := os.MkdirAll(filepath.Join(ts.dirRoot, dir), 0755); err != nil {
@@ -133,9 +131,6 @@ func createSymlinks(link, target string) error {
 func RemoveTmpSysFs() error {
 	err := ts.originalRoot.Chdir()
 	if err != nil {
-		return err
-	}
-	if err = syscall.Chroot("."); err != nil {
 		return err
 	}
 	if err = ts.originalRoot.Close(); err != nil {

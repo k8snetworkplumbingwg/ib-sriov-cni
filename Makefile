@@ -77,9 +77,11 @@ $(GOBIN)/goveralls: | $(BASE) ; $(info  building goveralls...)
 
 .PHONY: lint
 lint: | $(BASE) $(GOLINT) ; $(info  running golint...) @ ## Run golint
+	$Q mkdir -p $(BASE)/test
 	$Q cd $(BASE) && ret=0 && \
-		test -z "$$($(GOLINT) run | tee /dev/stderr)" || ret=1 ; \
-	 exit $$ret
+		test -z "$$($(GOLINT) run | tee $(BASE)/test/lint.out)" || ret=1 ; \
+	cat $(BASE)/test/lint.out; rm -rf $(BASE)/test; \
+	exit $$ret
 
 TEST_TARGETS := test-default test-bench test-short test-verbose test-race
 .PHONY: $(TEST_TARGETS) test-xml check test tests
@@ -99,17 +101,8 @@ test-xml: fmt lint | $(BASE) $(GO2XUNIT) ; $(info  running $(NAME:%=% )tests...)
 COVERAGE_MODE = count
 .PHONY: test-coverage test-coverage-tools
 test-coverage-tools: | $(GOVERALLS)
-test-coverage: COVERAGE_DIR := $(CURDIR)/test
-test-coverage: fmt lint test-coverage-tools | $(BASE) ; $(info  running coverage tests...) @ ## Run coverage tests
-	$Q mkdir -p $(COVERAGE_DIR)/coverage
-	$Q cd $(BASE) && for pkg in $(TESTPKGS); do \
-		$(GO) test \
-			-coverpkg=$$($(GO) list -f '{{ join .Deps "\n" }}' $$pkg | \
-					grep '^$(PACKAGE)/' | grep -v '^$(PACKAGE)/vendor/' | \
-					tr '\n' ',')$$pkg \
-			-covermode=$(COVERAGE_MODE) \
-			-coverprofile="$(COVERAGE_DIR)/coverage/`echo $$pkg | tr "/" "-"`.cover" $$pkg ;\
-	 done
+test-coverage: test-coverage-tools | $(BASE) ; $(info  running coverage tests...) @ ## Run coverage tests
+	$Q cd $(BASE); $(GO) test -covermode=$(COVERAGE_MODE) -coverprofile=ib-sriov-cni.cover ./...
 
 # Container image
 .PHONY: image

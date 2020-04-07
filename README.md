@@ -230,7 +230,7 @@ EOF
 ```
 
 ## Limitations
-### RDMA workloads utilizing RDMA Connection Manager (CM)
+### RDMA workloads
 
 When RDMA isolation is enabled, Pods creation/deletion cannot occur in parallel.
 This is due to the fact that moving RDMA device to namespace and rebinding

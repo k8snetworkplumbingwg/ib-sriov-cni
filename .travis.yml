@@ -3,6 +3,9 @@ language: go
 go:
   - 1.13.x
 
+env:
+  - IMAGE_NAME=mellanox/ib-sriov-cni
+
 before_script:
   - go get github.com/mattn/goveralls
 
@@ -20,9 +23,14 @@ deploy:
   # Push image to Dockerhub on merge to master
   - provider: script
     skip_cleanup: true
-    script: >
-     bash -c '
-     docker push $IMAGE_NAME;
-     echo done'
+    script: bash scripts/deploy.sh $IMAGE_NAME latest $TRAVIS_CPU_ARCH
     on:
       branch: master
+  # Push image to Dockerhub on tag
+  - provider: script
+    skip_cleanup: true
+    script: bash scripts/deploy.sh $IMAGE_NAME $TRAVIS_TAG $TRAVIS_CPU_ARCH
+    on:
+      tags: true
+      all_branches: true
+      condition: "$TRAVIS_TAG =~ ^v[0-9].*$"

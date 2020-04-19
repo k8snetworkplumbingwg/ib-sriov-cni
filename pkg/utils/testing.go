@@ -75,9 +75,9 @@ func CreateTmpSysFs() error {
 	originalRoot, _ := os.Open("/")
 	ts.originalRoot = originalRoot
 
-	tmpdir, err := ioutil.TempDir("/tmp", "ib-sriov-cni-plugin-testfiles-")
-	if err != nil {
-		return err
+	tmpdir, ioErr := ioutil.TempDir("/tmp", "ib-sriov-cni-plugin-testfiles-")
+	if ioErr != nil {
+		return ioErr
 	}
 
 	ts.dirRoot = tmpdir
@@ -88,7 +88,6 @@ func CreateTmpSysFs() error {
 		}
 	}
 	for filename, body := range ts.fileList {
-
 		if err := ioutil.WriteFile(filepath.Join(ts.dirRoot, filename), body, 0644); err != nil {
 			return err
 		}
@@ -129,14 +128,13 @@ func createSymlinks(link, target string) error {
 
 // RemoveTmpSysFs removes mocked sysfs
 func RemoveTmpSysFs() error {
-	err := ts.originalRoot.Chdir()
-	if err != nil {
+	if err := ts.originalRoot.Chdir(); err != nil {
 		return err
 	}
-	if err = ts.originalRoot.Close(); err != nil {
+	if err := ts.originalRoot.Close(); err != nil {
 		return err
 	}
-	if err = os.RemoveAll(ts.dirRoot); err != nil {
+	if err := os.RemoveAll(ts.dirRoot); err != nil {
 		return err
 	}
 	return nil

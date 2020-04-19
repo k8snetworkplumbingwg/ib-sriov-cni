@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+
 	"github.com/Mellanox/rdma-cni/pkg/rdma"
 	"github.com/containernetworking/plugins/pkg/ns"
 )

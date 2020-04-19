@@ -87,10 +87,14 @@ func (p *pciUtilsImpl) RebindVf(pfName, vfPciAddress string) error {
 	if !found {
 		return fmt.Errorf("failed to find VF %s for PF %s", vfPciAddress, pfName)
 	}
-	if err = sriovnet.UnbindVf(pfHandle, vf); err != nil {
+
+	err = sriovnet.UnbindVf(pfHandle, vf)
+	if err != nil {
 		return err
 	}
-	if err = sriovnet.BindVf(pfHandle, vf); err != nil {
+
+	err = sriovnet.BindVf(pfHandle, vf)
+	if err != nil {
 		return err
 	}
 	return nil
@@ -110,7 +114,7 @@ func NewSriovManager() types.Manager {
 }
 
 // SetupVF sets up a VF in Pod netns
-func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string, netns ns.NetNS) error {
+func (s *sriovManager) SetupVF(conf *types.NetConf, podifName, cid string, netns ns.NetNS) error {
 	// Get vf name since it may have been changed after the rebind in ApplyVFConfig which is called before
 	linkName, err := utils.GetVFLinkNames(conf.DeviceID)
 	if err != nil || linkName == "" {
@@ -161,19 +165,19 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName string, cid string
 }
 
 // ReleaseVF reset a VF from Pod netns and return it to init netns
-func (s *sriovManager) ReleaseVF(conf *types.NetConf, podifName string, cid string, netns ns.NetNS) error {
-
+func (s *sriovManager) ReleaseVF(conf *types.NetConf, podifName, cid string, netns ns.NetNS) error {
 	initns, err := ns.GetCurrentNS()
 	if err != nil {
 		return fmt.Errorf("failed to get init netns: %v", err)
 	}
 
 	if len(conf.ContIFNames) < 1 && len(conf.ContIFNames) != len(conf.HostIFNames) {
-		return fmt.Errorf("number of interface names mismatch ContIFNames: %d HostIFNames: %d", len(conf.ContIFNames), len(conf.HostIFNames))
+		return fmt.Errorf(
+			"number of interface names mismatch ContIFNames: %d HostIFNames: %d",
+			len(conf.ContIFNames), len(conf.HostIFNames))
 	}
 
 	return netns.Do(func(_ ns.NetNS) error {
-
 		// get VF device
 		linkObj, err := s.nLink.LinkByName(podifName)
 		if err != nil {
@@ -202,7 +206,6 @@ func (s *sriovManager) ReleaseVF(conf *types.NetConf, podifName string, cid stri
 
 // ApplyVFConfig configure a VF with parameters given in NetConf
 func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
-
 	pfLink, err := s.nLink.LinkByName(conf.Master)
 	if err != nil {
 		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
@@ -249,7 +252,6 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 
 // ResetVFConfig reset a VF with default values
 func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
-
 	pfLink, err := s.nLink.LinkByName(conf.Master)
 	if err != nil {
 		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
@@ -284,14 +286,17 @@ func (s *sriovManager) setVfGUID(conf *types.NetConf, pfLink netlink.Link, guidA
 	if err != nil {
 		return fmt.Errorf("failed to parse guid %s: %v", guidAddr, err)
 	}
-	if err = s.nLink.LinkSetVfNodeGUID(pfLink, conf.VFID, guid); err != nil {
+	err = s.nLink.LinkSetVfNodeGUID(pfLink, conf.VFID, guid)
+	if err != nil {
 		return fmt.Errorf("failed to add node guid %s: %v", guid, err)
 	}
-	if err = s.nLink.LinkSetVfPortGUID(pfLink, conf.VFID, guid); err != nil {
+	err = s.nLink.LinkSetVfPortGUID(pfLink, conf.VFID, guid)
+	if err != nil {
 		return fmt.Errorf("failed to add port guid %s: %v", guid, err)
 	}
 	// unbind vf then bind it to apply the guid
-	if err = s.utils.RebindVf(conf.Master, conf.DeviceID); err != nil {
+	err = s.utils.RebindVf(conf.Master, conf.DeviceID)
+	if err != nil {
 		return err
 	}
 	return nil

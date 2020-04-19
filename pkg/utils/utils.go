@@ -47,7 +47,7 @@ func GetSriovNumVfs(ifName string) (int, error) {
 }
 
 // GetVfid takes in VF's PCI address(addr) and pfName as string and returns VF's ID as int
-func GetVfid(addr string, pfName string) (int, error) {
+func GetVfid(addr, pfName string) (int, error) {
 	var id int
 	vfTotal, err := GetSriovNumVfs(pfName)
 	if err != nil {
@@ -115,7 +115,6 @@ func GetPciAddress(ifName string, vf int) (string, error) {
 
 // GetVFLinkNames returns VF's network interface name given it's PCI addr
 func GetVFLinkNames(pciAddr string) (string, error) {
-	var names []string
 	vfDir := filepath.Join(SysBusPci, pciAddr, "net")
 	if _, err := os.Lstat(vfDir); err != nil {
 		return "", err
@@ -130,7 +129,7 @@ func GetVFLinkNames(pciAddr string) (string, error) {
 		return "", fmt.Errorf("VF device %s sysfs path (%s) has no entries", pciAddr, vfDir)
 	}
 
-	names = make([]string, 0)
+	names := make([]string, 0, len(fInfos))
 	for _, f := range fInfos {
 		names = append(names, f.Name())
 	}
@@ -140,7 +139,6 @@ func GetVFLinkNames(pciAddr string) (string, error) {
 
 // GetVFLinkNamesFromVFID returns VF's network interface name given it's PF name as string and VF id as int
 func GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
-	var names []string
 	vfDir := filepath.Join(NetDirectory, pfName, "device", fmt.Sprintf("virtfn%d", vfID), "net")
 	if _, err := os.Lstat(vfDir); err != nil {
 		return nil, err
@@ -151,7 +149,7 @@ func GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
 		return nil, fmt.Errorf("failed to read the virtfn%d dir of the device %q: %v", vfID, pfName, err)
 	}
 
-	names = make([]string, 0)
+	names := make([]string, 0, len(fInfos))
 	for _, f := range fInfos {
 		names = append(names, f.Name())
 	}
@@ -171,7 +169,8 @@ func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
 	cRef := strings.Join(s, "-")
 
 	// save the rendered netconf for cmdDel
-	if err = saveScratchNetConf(cRef, dataDir, netConfBytes); err != nil {
+	err = saveScratchNetConf(cRef, dataDir, netConfBytes)
+	if err != nil {
 		return err
 	}
 

@@ -82,8 +82,8 @@ var _ = Describe("Sriov", func() {
 		It("ApplyVFConfig with valid GUID", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
 			mockedPciUtils := &mocks.PciUtils{}
-			hostGuid := "11:22:33:00:00:aa:bb:cc"
-			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGuid)
+			hostGUID := "11:22:33:00:00:aa:bb:cc"
+			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGUID)
 			Expect(err).ToNot(HaveOccurred())
 
 			fakeLink := &FakeLink{netlink.LinkAttrs{
@@ -100,7 +100,7 @@ var _ = Describe("Sriov", func() {
 			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
 			err = sm.ApplyVFConfig(netconf)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(netconf.HostIFGUID).To(Equal(hostGuid))
+			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
 		It("ApplyVFConfig with invalid GUID - wrong characters", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
@@ -168,8 +168,8 @@ var _ = Describe("Sriov", func() {
 		It("ApplyVFConfig check guid - failed to set node guid", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
 
-			hostGuid := "11:22:33:00:00:aa:bb:cc"
-			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGuid)
+			hostGUID := "11:22:33:00:00:aa:bb:cc"
+			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGUID)
 			Expect(err).ToNot(HaveOccurred())
 
 			fakeLink := &FakeLink{netlink.LinkAttrs{
@@ -179,19 +179,20 @@ var _ = Describe("Sriov", func() {
 			netconf.GUID = "01:23:45:67:89:ab:cd:ef"
 
 			mockedNetLinkManger.On("LinkByName", mock.Anything).Return(fakeLink, nil)
-			mockedNetLinkManger.On("LinkSetVfNodeGUID", fakeLink, mock.Anything, mock.Anything).Return(errors.New("mocked failed"))
+			mockedNetLinkManger.On("LinkSetVfNodeGUID", fakeLink, mock.Anything, mock.Anything).Return(
+				errors.New("mocked failed"))
 
 			sm := sriovManager{nLink: mockedNetLinkManger}
 			err = sm.ApplyVFConfig(netconf)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(`failed to add node guid 01:23:45:67:89:ab:cd:ef: mocked failed`))
-			Expect(netconf.HostIFGUID).To(Equal(hostGuid))
+			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
 		It("ApplyVFConfig check guid - failed to set port guid", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
 
-			hostGuid := "11:22:33:00:00:aa:bb:cc"
-			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGuid)
+			hostGUID := "11:22:33:00:00:aa:bb:cc"
+			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGUID)
 			Expect(err).ToNot(HaveOccurred())
 
 			fakeLink := &FakeLink{netlink.LinkAttrs{
@@ -202,20 +203,21 @@ var _ = Describe("Sriov", func() {
 
 			mockedNetLinkManger.On("LinkByName", mock.Anything).Return(fakeLink, nil)
 			mockedNetLinkManger.On("LinkSetVfNodeGUID", fakeLink, mock.Anything, mock.Anything).Return(nil)
-			mockedNetLinkManger.On("LinkSetVfPortGUID", fakeLink, mock.Anything, mock.Anything).Return(errors.New("mocked failed"))
+			mockedNetLinkManger.On("LinkSetVfPortGUID", fakeLink, mock.Anything, mock.Anything).Return(
+				errors.New("mocked failed"))
 
 			sm := sriovManager{nLink: mockedNetLinkManger}
 			err = sm.ApplyVFConfig(netconf)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal(`failed to add port guid 01:23:45:67:89:ab:cd:ef: mocked failed`))
-			Expect(netconf.HostIFGUID).To(Equal(hostGuid))
+			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
 		It("ApplyVFConfig check guid - failed to rebind after set guid", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
 			mockedPciUtils := &mocks.PciUtils{}
 
-			hostGuid := "11:22:33:00:00:aa:bb:cc"
-			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGuid)
+			hostGUID := "11:22:33:00:00:aa:bb:cc"
+			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGUID)
 			Expect(err).ToNot(HaveOccurred())
 
 			fakeLink := &FakeLink{netlink.LinkAttrs{
@@ -234,7 +236,7 @@ var _ = Describe("Sriov", func() {
 			err = sm.ApplyVFConfig(netconf)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(Equal("mocked failed"))
-			Expect(netconf.HostIFGUID).To(Equal(hostGuid))
+			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
 	})
 	Context("Checking SetupVF function", func() {

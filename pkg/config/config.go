@@ -6,9 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/containernetworking/cni/pkg/skel"
+
 	"github.com/Mellanox/ib-sriov-cni/pkg/types"
 	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
-	"github.com/containernetworking/cni/pkg/skel"
 )
 
 var (
@@ -20,12 +21,12 @@ var (
 func LoadConf(bytes []byte) (*types.NetConf, error) {
 	n := &types.NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
-		return nil, fmt.Errorf("LoadConf(): failed to load netconf: %v", err)
+		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
 
 	// validate that link state is one of supported values
 	if n.LinkState != "" && n.LinkState != "auto" && n.LinkState != "enable" && n.LinkState != "disable" {
-		return nil, fmt.Errorf("LoadConf(): invalid link_state value: %s", n.LinkState)
+		return nil, fmt.Errorf("invalid link_state value: %s", n.LinkState)
 	}
 	return n, nil
 }
@@ -37,18 +38,18 @@ func LoadDeviceInfo(netConf *types.NetConf) error {
 		// Get rest of the VF information
 		pfName, vfID, err := getVfInfo(netConf.DeviceID)
 		if err != nil {
-			return fmt.Errorf("LoadConf(): failed to get VF information: %q", err)
+			return fmt.Errorf("load config: failed to get VF information: %q", err)
 		}
 		netConf.VFID = vfID
 		netConf.Master = pfName
 	} else {
-		return fmt.Errorf("LoadConf(): VF pci addr is required")
+		return fmt.Errorf("load config: vf pci addr is required")
 	}
 
 	// Get interface name
 	hostIFNames, err := utils.GetVFLinkNames(netConf.DeviceID)
 	if err != nil || hostIFNames == "" {
-		return fmt.Errorf("LoadConf(): failed to detect VF %s name with error, %q", netConf.DeviceID, err)
+		return fmt.Errorf("load config: failed to detect VF %s name with error, %q", netConf.DeviceID, err)
 	}
 
 	netConf.HostIFNames = hostIFNames
@@ -56,7 +57,6 @@ func LoadDeviceInfo(netConf *types.NetConf) error {
 }
 
 func getVfInfo(vfPci string) (string, int, error) {
-
 	var vfID int
 
 	pf, err := utils.GetPfName(vfPci)

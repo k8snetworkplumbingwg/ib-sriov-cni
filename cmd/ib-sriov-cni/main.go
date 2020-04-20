@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/config"
-	"github.com/Mellanox/ib-sriov-cni/pkg/sriov"
-	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -15,13 +12,19 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+
+	"github.com/Mellanox/ib-sriov-cni/pkg/config"
+	"github.com/Mellanox/ib-sriov-cni/pkg/sriov"
+	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
 )
 
 const (
 	infiniBandAnnotation = "mellanox.infiniband.app"
 	configuredInfiniBand = "configured"
+	ipamDHCP             = "dhcp"
 )
 
+//nolint:gochecknoinits
 func init() {
 	// this ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
@@ -32,18 +35,20 @@ func init() {
 func cmdAdd(args *skel.CmdArgs) error {
 	netConf, err := config.LoadConf(args.StdinData)
 	if err != nil {
-		return fmt.Errorf("InfiniBand SRI-OV CNI failed to load netconf: %v", err)
+		return fmt.Errorf("infiniBand SRI-OV CNI failed to load netconf: %v", err)
 	}
 
 	cniArgs := netConf.Args.CNI
 	if cniArgs[infiniBandAnnotation] != configuredInfiniBand {
-		return fmt.Errorf("InfiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
+		return fmt.Errorf(
+			"infiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
 			infiniBandAnnotation, configuredInfiniBand)
 	}
 
 	guid, ok := cniArgs["guid"]
 	if !ok {
-		return fmt.Errorf("InfiniBand SRIOV-CNI failed, no guid found from cni-args, please check mellanox ib-kubernets")
+		return fmt.Errorf(
+			"infiniBand SRIOV-CNI failed, no guid found from cni-args, please check mellanox ib-kubernets")
 	}
 	netConf.GUID = guid
 
@@ -60,17 +65,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	if err = config.LoadDeviceInfo(netConf); err != nil {
+	err = config.LoadDeviceInfo(netConf)
+	if err != nil {
 		return fmt.Errorf("failed to get device specific information. %v", err)
 	}
 
 	sm := sriov.NewSriovManager()
-	if err := sm.ApplyVFConfig(netConf); err != nil {
-		return fmt.Errorf("InfiniBand SRI-OV CNI failed to configure VF %q", err)
+	err = sm.ApplyVFConfig(netConf)
+	if err != nil {
+		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
 	}
 
 	// Note(adrianc): We do this here as ApplyVFCOnfig is rebinding the VF, causing the RDMA device to be recreated.
-	// We do this here due to some un-intuitive kernel behaviour (which i hope will change), moving an RDMA device
+	// We do this here due to some un-intuitive kernel behavior (which i hope will change), moving an RDMA device
 	// to namespace causes all of its associated ULP devices (IPoIB) to be recreated in the default namespace,
 	// hence SetupVF needs to occur after moving RDMA device to namespace
 	if netConf.RdmaIso {
@@ -101,11 +108,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 	err = sm.SetupVF(netConf, args.IfName, args.ContainerID, netns)
 	defer func() {
 		if err != nil {
-			err := netns.Do(func(_ ns.NetNS) error {
-				_, err := netlink.LinkByName(args.IfName)
-				return err
+			nsErr := netns.Do(func(_ ns.NetNS) error {
+				_, innerErr := netlink.LinkByName(args.IfName)
+				return innerErr
 			})
-			if err == nil {
+			if nsErr == nil {
 				_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
 			}
 		}
@@ -116,12 +123,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// run the IPAM plugin
 	if netConf.IPAM.Type != "" {
-		if netConf.IPAM.Type == "dhcp" {
+		if netConf.IPAM.Type == ipamDHCP {
 			return fmt.Errorf("ipam type dhcp is not supported")
 		}
-		r, err := ipam.ExecAdd(netConf.IPAM.Type, args.StdinData)
+		var r types.Result
+		r, err = ipam.ExecAdd(netConf.IPAM.Type, args.StdinData)
 		if err != nil {
-			return fmt.Errorf("failed to set up IPAM plugin type %q from the device %q: %v", netConf.IPAM.Type, netConf.Master, err)
+			return fmt.Errorf("failed to set up IPAM plugin type %q from the device %q: %v",
+				netConf.IPAM.Type, netConf.Master, err)
 		}
 
 		defer func() {
@@ -131,7 +140,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}()
 
 		// Convert the IPAM result into the current Result type
-		newResult, err := current.NewResultFromResult(r)
+		var newResult *current.Result
+		newResult, err = current.NewResultFromResult(r)
 		if err != nil {
 			return err
 		}
@@ -184,7 +194,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	sm := sriov.NewSriovManager()
 
 	if netConf.IPAM.Type != "" {
-		if netConf.IPAM.Type == "dhcp" {
+		if netConf.IPAM.Type == ipamDHCP {
 			return fmt.Errorf("ipam type dhcp is not supported")
 		}
 		err = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
@@ -209,12 +219,13 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 	defer netns.Close()
 
-	if err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns); err != nil {
+	err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+	if err != nil {
 		return err
 	}
 
 	// Move RDMA device to default namespace
-	// Note(adrianc): Due to some un-intuitive kernel behaviour (which i hope will change), moving an RDMA device
+	// Note(adrianc): Due to some un-intuitive kernel behavior (which i hope will change), moving an RDMA device
 	// to namespace causes all of its associated ULP devices (IPoIB) to be recreated in the default namespace.
 	// we strategically place this here to allow:
 	//   1. netedv cleanup during ReleaseVF.
@@ -224,7 +235,8 @@ func cmdDel(args *skel.CmdArgs) error {
 		err = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
 		if err != nil {
 			return fmt.Errorf(
-				"failed to restore RDMA device %s to default namespace. %v", netConf.RdmaNetState.ContainerRdmaDevName, err)
+				"failed to restore RDMA device %s to default namespace. %v",
+				netConf.RdmaNetState.ContainerRdmaDevName, err)
 		}
 	}
 

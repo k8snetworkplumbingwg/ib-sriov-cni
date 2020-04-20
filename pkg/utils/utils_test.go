@@ -43,7 +43,8 @@ var _ = Describe("Utils", func() {
 	})
 	Context("Checking GetPciAddress function", func() {
 		It("Assuming existing interface and vf", func() {
-			Expect(GetPciAddress("ib0", 0)).To(Equal("0000:af:06.0"), "Existing PF and VF id should return correct VF pci address")
+			Expect(GetPciAddress("ib0", 0)).To(Equal("0000:af:06.0"),
+				"Existing PF and VF id should return correct VF pci address")
 		})
 		It("Assuming not existing interface", func() {
 			_, err := GetPciAddress("enp175s0f2", 0)

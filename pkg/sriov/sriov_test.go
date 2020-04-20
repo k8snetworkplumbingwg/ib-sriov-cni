@@ -4,14 +4,14 @@ import (
 	"errors"
 	"net"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/types"
-	"github.com/Mellanox/ib-sriov-cni/pkg/types/mocks"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"github.com/vishvananda/netlink"
+
+	"github.com/Mellanox/ib-sriov-cni/pkg/types"
+	"github.com/Mellanox/ib-sriov-cni/pkg/types/mocks"
 )
 
 // FakeLink is a dummy netlink struct used during testing

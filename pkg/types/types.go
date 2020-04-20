@@ -3,10 +3,11 @@ package types
 import (
 	"net"
 
-	rdmatypes "github.com/Mellanox/rdma-cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+
+	rdmatypes "github.com/Mellanox/rdma-cni/pkg/types"
 )
 
 // NetConf extends types.NetConf for ib-sriov-cni

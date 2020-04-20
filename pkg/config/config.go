@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/containernetworking/cni/pkg/skel"
+
 	"github.com/Mellanox/ib-sriov-cni/pkg/types"
 	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
-
-	"github.com/containernetworking/cni/pkg/skel"
 )
 
 var (

@@ -5,10 +5,6 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/config"
-	"github.com/Mellanox/ib-sriov-cni/pkg/sriov"
-	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
-
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -16,6 +12,10 @@ import (
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+
+	"github.com/Mellanox/ib-sriov-cni/pkg/config"
+	"github.com/Mellanox/ib-sriov-cni/pkg/sriov"
+	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
 )
 
 const (

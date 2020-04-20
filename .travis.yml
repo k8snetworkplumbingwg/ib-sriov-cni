@@ -10,7 +10,6 @@ before_script:
   - go get github.com/mattn/goveralls
 
 script:
-  - make fmt
   - make lint
   - make test-coverage
   - goveralls -coverprofile=ib-sriov-cni.cover -service=travis-ci

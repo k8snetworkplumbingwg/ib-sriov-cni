@@ -19,7 +19,7 @@ type NetConf struct {
 	HostIFNames  string // VF netdevice name(s)
 	HostIFGUID   string // VF netdevice GUID
 	ContIFNames  string // VF names after in the container; used during deletion
-	GUID         string `json:"-"` // VF Guid is allowed only read from cni-args of network attachment
+	GUID         string `json:"-"` // Taken from either CNI_ARGS "guid" attribute or from RuntimeConfig
 	PKey         string `json:"pkey"`
 	LinkState    string `json:"link_state,omitempty"` // auto|enable|disable
 	RdmaIso      bool   `json:"rdmaIsolation,omitempty"`
@@ -27,6 +27,12 @@ type NetConf struct {
 	Args         struct {
 		CNI map[string]string `json:"cni"`
 	} `json:"args"`
+	RuntimeConfig RuntimeConf `json:"runtimeConfig,omitempty"`
+}
+
+// RuntimeConf represents the plugin's runtime configurations
+type RuntimeConf struct {
+	InfinibandGUID string `json:"infinibandGUID"`
 }
 
 // Manager provides interface invoke sriov nic related operations

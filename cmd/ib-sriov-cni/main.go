@@ -15,6 +15,7 @@ import (
 
 	"github.com/Mellanox/ib-sriov-cni/pkg/config"
 	"github.com/Mellanox/ib-sriov-cni/pkg/sriov"
+	localtypes "github.com/Mellanox/ib-sriov-cni/pkg/types"
 	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
 )
 
@@ -32,25 +33,35 @@ func init() {
 	runtime.LockOSThread()
 }
 
+func getGUIDFromConf(netConf *localtypes.NetConf) (string, error) {
+	// Take from runtime config if available
+	if netConf.RuntimeConfig.InfinibandGUID != "" {
+		return netConf.RuntimeConfig.InfinibandGUID, nil
+	}
+	// Take from CNI_ARGS if available
+	if guid, ok := netConf.Args.CNI["guid"]; ok {
+		return guid, nil
+	}
+
+	return "", fmt.Errorf(
+		"infiniBand SRIOV-CNI failed, no guid found from runtimeConfig/CNI_ARGS, please check mellanox ib-kubernets")
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
 	netConf, err := config.LoadConf(args.StdinData)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to load netconf: %v", err)
 	}
 
-	cniArgs := netConf.Args.CNI
-	if cniArgs[infiniBandAnnotation] != configuredInfiniBand {
+	if netConf.Args.CNI[infiniBandAnnotation] != configuredInfiniBand {
 		return fmt.Errorf(
 			"infiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
 			infiniBandAnnotation, configuredInfiniBand)
 	}
 
-	guid, ok := cniArgs["guid"]
-	if !ok {
-		return fmt.Errorf(
-			"infiniBand SRIOV-CNI failed, no guid found from cni-args, please check mellanox ib-kubernets")
+	if netConf.GUID, err = getGUIDFromConf(netConf); err != nil {
+		return err
 	}
-	netConf.GUID = guid
 
 	if netConf.RdmaIso {
 		err = utils.EnsureRdmaSystemMode()

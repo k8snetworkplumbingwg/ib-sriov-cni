@@ -208,6 +208,12 @@ about the system requirements to support this mode of operation can be found [he
 
 > *__Note__*: If `rdmaIsolation` is set to _true_, [`rdma-cni`](https://github.com/Mellanox/rdma-cni) should not be used.
 
+### Supported Capabilities / Runtime configurations
+
+ib-sriov-cni supports the following [CNI's Capabilities / Runtime Configuration](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#dynamic-plugin-specific-fields-capabilities--runtime-configuration):
+
+* `infinibandGUID` (string): Dynamically assign Infiniband GUID to network interface (VF).
+
 ## Usage
 
 ```

@@ -8,6 +8,7 @@ require (
 	github.com/containernetworking/cni v0.7.1
 	github.com/containernetworking/plugins v0.8.5
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
+	github.com/gofrs/flock v0.7.1
 	github.com/onsi/ginkgo v1.12.0
 	github.com/onsi/gomega v1.9.0
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

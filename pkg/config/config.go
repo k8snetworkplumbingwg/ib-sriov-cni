@@ -15,6 +15,10 @@ import (
 var (
 	// DefaultCNIDir used for caching NetConf
 	DefaultCNIDir = "/var/lib/cni/ib-sriov-cni"
+	// CniFileLockDir point to the CNI's lockfile
+	CniFileLockDir = "/var/run/cni/ib-sriov-cni"
+	// CniFileLockName is the name of the lockfile used in the CNI
+	CniFileLockName = "cni.lock"
 )
 
 // LoadConf parses and validates stdin netconf and returns NetConf object

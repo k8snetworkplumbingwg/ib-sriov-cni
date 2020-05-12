@@ -3,7 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
 	"runtime"
+	"syscall"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -11,6 +15,7 @@ import (
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/gofrs/flock"
 	"github.com/vishvananda/netlink"
 
 	"github.com/Mellanox/ib-sriov-cni/pkg/config"
@@ -45,6 +50,42 @@ func getGUIDFromConf(netConf *localtypes.NetConf) (string, error) {
 
 	return "", fmt.Errorf(
 		"infiniBand SRIOV-CNI failed, no guid found from runtimeConfig/CNI_ARGS, please check mellanox ib-kubernets")
+}
+
+func lockCNIExecution() (*flock.Flock, error) {
+	// Note: Unbind/Bind VF and move RDMA device to namespace causes rdma resources to be re-created for the VF.
+	// CNI may be invoked in parallel and kernel may provide the VF's RDMA resources under a different name.
+	// As the mapping of RDMA resources is done in Device plugin prior to CNI invocation, it must not change here.
+	// We serialize the CNI's operation causing kernel to allocate the VF's RDMA resources under the same name.
+	// In the future, Systems should use udev PCI based RDMA device names, ensuring consistent RDMA resources names.
+	err := os.MkdirAll(config.CniFileLockDir, 0700)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ib-sriov-cni lock file directory(%q): %v", config.CniFileLockDir, err)
+	}
+
+	lock := flock.New(filepath.Join(config.CniFileLockDir, config.CniFileLockName))
+	err = lock.Lock()
+	if err != nil {
+		return nil, err
+	}
+	// unlock on signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func(sigC chan os.Signal, l *flock.Flock) {
+		// This goroutine will die when the process dies (main exits)
+		sig := <-sigC
+		_ = l.Unlock()
+		signal.Reset(syscall.SIGINT, syscall.SIGTERM)
+		close(sigC)
+		// Re-raise the signal
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(sig)
+	}(sigChan, lock)
+	return lock, nil
+}
+
+func unlockCNIExecution(lock *flock.Flock) {
+	_ = lock.Unlock()
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -82,6 +123,14 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	sm := sriov.NewSriovManager()
+
+	// Lock CNI operation to serialize the operation
+	lock, err := lockCNIExecution()
+	if err != nil {
+		return err
+	}
+	defer unlockCNIExecution(lock)
+
 	err = sm.ApplyVFConfig(netConf)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
@@ -229,6 +278,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to open netns %s: %q", netns, err)
 	}
 	defer netns.Close()
+
+	// Lock CNI operation to serialize the operation
+	lock, err := lockCNIExecution()
+	if err != nil {
+		return err
+	}
+	defer unlockCNIExecution(lock)
 
 	err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
 	if err != nil {

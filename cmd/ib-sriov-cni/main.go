@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -66,6 +68,19 @@ func lockCNIExecution() (*flock.Flock, error) {
 	if err != nil {
 		return nil, err
 	}
+	// unlock on signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func(sigC chan os.Signal, l *flock.Flock) {
+		// This goroutine will die when the process dies (main exits)
+		sig := <-sigC
+		_ = l.Unlock()
+		signal.Reset(syscall.SIGINT, syscall.SIGTERM)
+		close(sigC)
+		// Re-raise the signal
+		p, _ := os.FindProcess(os.Getpid())
+		_ = p.Signal(sig)
+	}(sigChan, lock)
 	return lock, nil
 }
 

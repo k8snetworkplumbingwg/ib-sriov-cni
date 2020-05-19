@@ -9,8 +9,8 @@ data:
         "resourceList": [{
                 "resourcePrefix": "mellanox.com"
                 "resourceName": "mlnx_sriov_rdma_ib",
-                "isRdma": true,
                 "selectors": {
+                    "isRdma": true,
                     "vendors": ["15b3"],
                     "devices": ["1018"],
                     "drivers": ["mlx5_ib"]

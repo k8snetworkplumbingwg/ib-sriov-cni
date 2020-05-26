@@ -1,5 +1,5 @@
 # Package related
-BINARY_NAME=ib-sriov-cni
+BINARY_NAME=ib-sriov
 PACKAGE=ib-sriov-cni
 ORG_PATH=github.com/Mellanox
 REPO_PATH=$(ORG_PATH)/$(PACKAGE)
@@ -58,7 +58,7 @@ build: $(BUILDDIR)/$(BINARY_NAME) ; $(info Building $(BINARY_NAME)...) ## Build 
 	$(info Done!)
 
 $(BUILDDIR)/$(BINARY_NAME): $(GOFILES) | $(BUILDDIR)
-	@cd $(BASE)/cmd/$(BINARY_NAME) && CGO_ENABLED=0 $(GO) build -o $(BUILDDIR)/$(BINARY_NAME) -tags no_openssl -v
+	@cd $(BASE)/cmd/$(PACKAGE) && CGO_ENABLED=0 $(GO) build -o $(BUILDDIR)/$(BINARY_NAME) -tags no_openssl -v
 
 # Tools
 $(GOLANGCI_LINT): | $(BASE) ; $(info  building golangci-lint...)

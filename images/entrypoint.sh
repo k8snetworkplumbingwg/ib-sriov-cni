@@ -5,7 +5,7 @@ set -e
 
 # Set known directories.
 CNI_BIN_DIR="/host/opt/cni/bin"
-IB_SRIOV_CNI_BIN_FILE="/usr/bin/ib-sriov-cni"
+IB_SRIOV_CNI_BIN_FILE="/usr/bin/ib-sriov"
 
 # Give help text for parameters.
 usage()

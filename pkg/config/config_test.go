@@ -10,7 +10,7 @@ var _ = Describe("Config", func() {
 		It("Assuming correct config file - existing DeviceID", func() {
 			conf := []byte(`{
         "name": "mynet",
-        "type": "ib-sriov-cni",
+        "type": "ib-sriov",
         "deviceID": "0000:af:06.1",
         "vf": 0,
         "ipam": {
@@ -28,7 +28,7 @@ var _ = Describe("Config", func() {
 		It("Assuming incorrect config file - broken json", func() {
 			conf := []byte(`{
         "name": "mynet"
-		"type": "ib-sriov-cni",
+		"type": "ib-sriov",
 		"deviceID": "0000:af:06.1",
         "vf": 0,
         "ipam": {

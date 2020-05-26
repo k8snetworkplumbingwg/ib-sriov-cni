@@ -25,7 +25,7 @@ To build the plugin binary:
 # make
 ```
 
-Upon successful build the plugin binary will be available in `build/ib-sriov-cni`.
+Upon successful build the plugin binary will be available in `build/ib-sriov`.
 
 ## Enable SR-IOV
 
@@ -197,7 +197,7 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 ## Configuration reference
 
 * `name` (string, required): the name of the network
-* `type` (string, required): "ib-sriov-cni"
+* `type` (string, required): "ib-sriov"
 * `deviceID` (string, required): A valid pci address of an InfiniBand SR-IOV NIC's VF. e.g. "0000:03:02.3"
 * `guid` (string, optional): InfiniBand Guid for VF.
 * `pkey` (string, optional): InfiniBand pkey for VF, this filed is used by [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes) to add pkey with guid to InfiniBand subnet manager client e.g. [Mellanox UFM](https://www.mellanox.com/products/management-software/ufm), [OpenSM](https://docs.mellanox.com/display/MLNXOFEDv461000/OpenSM).
@@ -210,18 +210,18 @@ about the system requirements to support this mode of operation can be found [he
 
 ### Supported Capabilities / Runtime configurations
 
-ib-sriov-cni supports the following [CNI's Capabilities / Runtime Configuration](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#dynamic-plugin-specific-fields-capabilities--runtime-configuration):
+ib-sriov supports the following [CNI's Capabilities / Runtime Configuration](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#dynamic-plugin-specific-fields-capabilities--runtime-configuration):
 
 * `infinibandGUID` (string): Dynamically assign Infiniband GUID to network interface (VF).
 
 ## Usage
 
 ```
-# cat > /etc/cni/net.d/10-ib-sriov-cni.conf <<EOF
+# cat > /etc/cni/net.d/10-ib-sriov.conf <<EOF
 {
     "cniVersion": "0.3.1",
     "name": "mynet",
-    "type": "ib-sriov-cni",
+    "type": "ib-sriov",
     "deviceID": "0000:03:02.0",
     "link_state": "enable",
     "rdmaIsolation": true,

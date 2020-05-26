@@ -239,12 +239,3 @@ ib-sriov-cni supports the following [CNI's Capabilities / Runtime Configuration]
 
 EOF
 ```
-
-## Limitations
-### RDMA workloads
-
-When RDMA isolation is enabled, Pods creation/deletion cannot occur in parallel.
-This is due to the fact that moving RDMA device to namespace and rebinding
-different VF may rename RDMA character devices under /dev/infiniband.
-This can cause mismatch between the RDMA character devices and RDMA
-device passed to the Pods which leads to traffic failure.

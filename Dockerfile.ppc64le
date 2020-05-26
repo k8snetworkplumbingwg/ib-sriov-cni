@@ -11,7 +11,7 @@ RUN apk add --update --virtual build-dependencies build-base linux-headers make 
     make build
 
 FROM ppc64le/alpine
-COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov-cni /usr/bin/
+COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov /usr/bin/
 WORKDIR /
 
 LABEL io.k8s.display-name="InfiniBand SR-IOV CNI"

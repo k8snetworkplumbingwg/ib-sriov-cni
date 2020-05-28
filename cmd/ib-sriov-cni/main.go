@@ -94,7 +94,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to load netconf: %v", err)
 	}
 
-	if netConf.Args.CNI[infiniBandAnnotation] != configuredInfiniBand {
+	if netConf.IBKubernetesEnabled && netConf.Args.CNI[infiniBandAnnotation] != configuredInfiniBand {
 		return fmt.Errorf(
 			"infiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
 			infiniBandAnnotation, configuredInfiniBand)

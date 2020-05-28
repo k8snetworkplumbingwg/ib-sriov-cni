@@ -11,6 +11,7 @@ spec:
   "name": "sriov-network",
   "pkey": "0x5",
   "link_state": "enable",
+  "ibKubernetesEnabled": false,
   "ipam": {
     "type": "host-local",
     "subnet": "10.56.217.0/24",

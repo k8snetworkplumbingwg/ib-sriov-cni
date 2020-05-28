@@ -1,16 +1,12 @@
-FROM golang:alpine as builder
+FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.10 AS builder
 
 COPY . /usr/src/ib-sriov-cni
 
-ENV HTTP_PROXY $http_proxy
-ENV HTTPS_PROXY $https_proxy
-
-RUN apk add --update --virtual build-dependencies build-base linux-headers && \
-    cd /usr/src/ib-sriov-cni && \
-    make clean && \
+WORKDIR /usr/src/ib-sriov-cni
+RUN make clean && \
     make build
 
-FROM alpine
+FROM registry.svc.ci.openshift.org/ocp/4.0:base
 COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov /usr/bin/
 WORKDIR /
 

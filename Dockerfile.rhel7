@@ -1,6 +1,6 @@
 FROM registry.svc.ci.openshift.org/ocp/builder:golang-1.10 AS builder
 
-ADD . /usr/src/ib-sriov-cni
+COPY . /usr/src/ib-sriov-cni
 
 WORKDIR /usr/src/ib-sriov-cni
 RUN make clean && \
@@ -12,6 +12,6 @@ WORKDIR /
 
 LABEL io.k8s.display-name="InfiniBand SR-IOV CNI"
 
-ADD ./images/entrypoint.sh /
+COPY ./images/entrypoint.sh /
 
 ENTRYPOINT ["/entrypoint.sh"]

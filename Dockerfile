@@ -1,6 +1,6 @@
 FROM golang:alpine as builder
 
-ADD . /usr/src/ib-sriov-cni
+COPY . /usr/src/ib-sriov-cni
 
 ENV HTTP_PROXY $http_proxy
 ENV HTTPS_PROXY $https_proxy
@@ -16,6 +16,6 @@ WORKDIR /
 
 LABEL io.k8s.display-name="InfiniBand SR-IOV CNI"
 
-ADD ./images/entrypoint.sh /
+COPY ./images/entrypoint.sh /
 
 ENTRYPOINT ["/entrypoint.sh"]

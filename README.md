@@ -200,11 +200,12 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 * `type` (string, required): "ib-sriov"
 * `deviceID` (string, required): A valid pci address of an InfiniBand SR-IOV NIC's VF. e.g. "0000:03:02.3"
 * `guid` (string, optional): InfiniBand Guid for VF.
-* `pkey` (string, optional): InfiniBand pkey for VF, this filed is used by [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes) to add pkey with guid to InfiniBand subnet manager client e.g. [Mellanox UFM](https://www.mellanox.com/products/management-software/ufm), [OpenSM](https://docs.mellanox.com/display/MLNXOFEDv461000/OpenSM).
+* `pkey` (string, optional): InfiniBand pkey for VF, this field is used by [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes) to add pkey with guid to InfiniBand subnet manager client e.g. [Mellanox UFM](https://www.mellanox.com/products/management-software/ufm), [OpenSM](https://docs.mellanox.com/display/MLNXOFEDv461000/OpenSM).
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network, `dhcp` is not supported.
 * `link_state` (string, optional): Enforces link state for the VF. Allowed values: auto, enable, disable.
 * `rdmaIsolation` (boolean, optional): Enable RDMA network namespace isolation for RDMA workloads. More information
 about the system requirements to support this mode of operation can be found [here](https://github.com/Mellanox/rdma-cni)
+* `ibKubernetesEnabled` (bool, optional): Enforces ib-sriov-cni to work with [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes).
 
 > *__Note__*: If `rdmaIsolation` is set to _true_, [`rdma-cni`](https://github.com/Mellanox/rdma-cni) should not be used.
 
@@ -225,6 +226,7 @@ ib-sriov supports the following [CNI's Capabilities / Runtime Configuration](htt
     "deviceID": "0000:03:02.0",
     "link_state": "enable",
     "rdmaIsolation": true,
+    "ibKubernetesEnabled": false,
     "ipam": {
                 "type": "host-local",
                 "subnet": "10.56.217.0/24",

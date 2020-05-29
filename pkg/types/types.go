@@ -13,21 +13,22 @@ import (
 // NetConf extends types.NetConf for ib-sriov-cni
 type NetConf struct {
 	types.NetConf
-	Master       string
-	DeviceID     string `json:"deviceID"` // PCI address of a VF in valid sysfs format
-	VFID         int
-	HostIFNames  string // VF netdevice name(s)
-	HostIFGUID   string // VF netdevice GUID
-	ContIFNames  string // VF names after in the container; used during deletion
-	GUID         string `json:"-"` // Taken from either CNI_ARGS "guid" attribute or from RuntimeConfig
-	PKey         string `json:"pkey"`
-	LinkState    string `json:"link_state,omitempty"` // auto|enable|disable
-	RdmaIso      bool   `json:"rdmaIsolation,omitempty"`
-	RdmaNetState rdmatypes.RdmaNetState
-	Args         struct {
+	Master              string
+	DeviceID            string `json:"deviceID"` // PCI address of a VF in valid sysfs format
+	VFID                int
+	HostIFNames         string // VF netdevice name(s)
+	HostIFGUID          string // VF netdevice GUID
+	ContIFNames         string // VF names after in the container; used during deletion
+	GUID                string `json:"-"` // Taken from either CNI_ARGS "guid" attribute or from RuntimeConfig
+	PKey                string `json:"pkey"`
+	LinkState           string `json:"link_state,omitempty"` // auto|enable|disable
+	RdmaIso             bool   `json:"rdmaIsolation,omitempty"`
+	IBKubernetesEnabled bool   `json:"ibKubernetesEnabled,omitempty"`
+	RdmaNetState        rdmatypes.RdmaNetState
+	RuntimeConfig       RuntimeConf `json:"runtimeConfig,omitempty"`
+	Args                struct {
 		CNI map[string]string `json:"cni"`
 	} `json:"args"`
-	RuntimeConfig RuntimeConf `json:"runtimeConfig,omitempty"`
 }
 
 // RuntimeConf represents the plugin's runtime configurations

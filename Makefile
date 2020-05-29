@@ -104,6 +104,10 @@ test-coverage: test-coverage-tools | $(BASE) ; $(info  running coverage tests...
 image: | $(BASE) ; $(info Building Docker image...)  ## Build conatiner image
 	$(IMAGE_BUILDER) build -t $(TAG) -f $(DOCKERFILE)  $(CURDIR) $(IMAGE_BUILD_OPTS)
 
+# Dependency management
+.PHONY: deps-update
+deps-update: ; $(info  updating dependencies...)
+	go mod tidy && go mod vendor
 
 # Misc
 

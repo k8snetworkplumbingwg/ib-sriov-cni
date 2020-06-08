@@ -38,18 +38,18 @@ func init() {
 	runtime.LockOSThread()
 }
 
-func getGUIDFromConf(netConf *localtypes.NetConf) (string, error) {
+func getGUIDFromConf(netConf *localtypes.NetConf) string {
 	// Take from runtime config if available
 	if netConf.RuntimeConfig.InfinibandGUID != "" {
-		return netConf.RuntimeConfig.InfinibandGUID, nil
+		return netConf.RuntimeConfig.InfinibandGUID
 	}
 	// Take from CNI_ARGS if available
 	if guid, ok := netConf.Args.CNI["guid"]; ok {
-		return guid, nil
+		return guid
 	}
 
-	return "", fmt.Errorf(
-		"infiniBand SRIOV-CNI failed, no guid found from runtimeConfig/CNI_ARGS, please check mellanox ib-kubernets")
+	// No guid provided
+	return ""
 }
 
 func lockCNIExecution() (*flock.Flock, error) {
@@ -100,9 +100,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			infiniBandAnnotation, configuredInfiniBand)
 	}
 
-	if netConf.GUID, err = getGUIDFromConf(netConf); err != nil {
-		return err
-	}
+	netConf.GUID = getGUIDFromConf(netConf)
 
 	if netConf.RdmaIso {
 		err = utils.EnsureRdmaSystemMode()

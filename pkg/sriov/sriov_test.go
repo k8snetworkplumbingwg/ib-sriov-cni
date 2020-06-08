@@ -102,6 +102,19 @@ var _ = Describe("Sriov", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
+		It("ApplyVFConfig without GUID", func() {
+			mockedNetLinkManger := &mocks.NetlinkManager{}
+			mockedPciUtils := &mocks.PciUtils{}
+
+			fakeLink := &FakeLink{}
+			mockedNetLinkManger.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+
+			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
+			err := sm.ApplyVFConfig(netconf)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(netconf.HostIFGUID).To(Equal(""))
+			Expect(netconf.GUID).To(Equal(""))
+		})
 		It("ApplyVFConfig with invalid GUID - wrong characters", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
 
@@ -455,6 +468,17 @@ var _ = Describe("Sriov", func() {
 			mockedNetLinkManger.On("LinkSetVfPortGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)
 
 			mockedPciUtils.On("RebindVf", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil)
+
+			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
+			err := sm.ResetVFConfig(netconf)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("ResetVFConfig without GUID", func() {
+			mockedNetLinkManger := &mocks.NetlinkManager{}
+			mockedPciUtils := &mocks.PciUtils{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{}}
+			mockedNetLinkManger.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
 
 			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
 			err := sm.ResetVFConfig(netconf)

@@ -3,6 +3,7 @@ package sriov
 import (
 	"fmt"
 	"net"
+	"regexp"
 
 	"github.com/Mellanox/sriovnet"
 	"github.com/containernetworking/plugins/pkg/ns"

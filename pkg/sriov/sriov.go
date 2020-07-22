@@ -248,14 +248,15 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 			return err
 		}
 	} else {
-		// VF might already have guid. Verify if it is valid
+		// Verify VF have valid GUID.
 		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
 		if err != nil {
 			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
 		}
 
 		hwAddr := vfLink.Attrs().HardwareAddr.String()
-		if hwAddr == "" || !utils.IsValidGUID(hwAddr[36:]) {
+		match, _ := regexp.MatchString("((00:){7}00|(ff:){7}ff|(FF:){7}FF)$", hwAddr)
+		if hwAddr == "" || match {
 			return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
 		}
 	}

@@ -102,11 +102,28 @@ var _ = Describe("Sriov", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
-		It("ApplyVFConfig without GUID, VF's GUID is not configured", func() {
+		It("ApplyVFConfig without GUID, VF's GUID all zeroes", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}
 			mockedPciUtils := &mocks.PciUtils{}
 
 			hostGUID := "00:00:00:00:00:00:00:00"
+			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGUID)
+			Expect(err).ToNot(HaveOccurred())
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{
+				HardwareAddr: gid,
+			}}
+			mockedNetLinkManger.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+
+			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
+			err = sm.ApplyVFConfig(netconf)
+			Expect(err).To(HaveOccurred())
+		})
+		It("ApplyVFConfig without GUID, VF's GUID all 'F's", func() {
+			mockedNetLinkManger := &mocks.NetlinkManager{}
+			mockedPciUtils := &mocks.PciUtils{}
+
+			hostGUID := "ff:ff:ff:ff:ff:ff:ff:ff"
 			gid, err := net.ParseMAC("00:00:04:a5:fe:80:00:00:00:00:00:00:" + hostGUID)
 			Expect(err).ToNot(HaveOccurred())
 

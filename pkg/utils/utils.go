@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -210,7 +211,11 @@ func CleanCachedNetConf(cRefPath string) error {
 	return nil
 }
 
-// IsValidGUID check if the guild is valid
+func GetGUIDFromHwAddr(hwAddr net.HardwareAddr) string {
+	return hwAddr.String()[36:]
+}
+
+// IsValidGUID check if the guid is valid
 func IsValidGUID(guid string) bool {
 	if IsAllZeroGUID(guid) {
 		return false
@@ -223,4 +228,9 @@ func IsValidGUID(guid string) bool {
 // IsAllZeroGUID check if the guid is all zero which is invalid guid
 func IsAllZeroGUID(guid string) bool {
 	return guid == "00:00:00:00:00:00:00:00"
+}
+
+// IsAllOnesGUID check if the guid is all ones
+func IsAllOnesGUID(guid string) bool {
+	return guid == "ff:ff:ff:ff:ff:ff:ff:ff" || guid == "FF:FF:FF:FF:FF:FF:FF:FF"
 }

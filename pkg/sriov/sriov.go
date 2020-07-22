@@ -3,7 +3,6 @@ package sriov
 import (
 	"fmt"
 	"net"
-	"regexp"
 
 	"github.com/Mellanox/sriovnet"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -255,9 +254,8 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
 		}
 
-		hwAddr := vfLink.Attrs().HardwareAddr.String()
-		match, _ := regexp.MatchString("((00:){7}00|(ff:){7}ff|(FF:){7}FF)$", hwAddr)
-		if hwAddr == "" || match {
+		guid := utils.GetGUIDFromHwAddr(vfLink.Attrs().HardwareAddr)
+		if guid == "" || utils.IsAllZeroGUID(guid) || utils.IsAllOnesGUID(guid) {
 			return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
 		}
 	}

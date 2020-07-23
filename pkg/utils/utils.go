@@ -211,8 +211,13 @@ func CleanCachedNetConf(cRefPath string) error {
 	return nil
 }
 
+// Return GUID string, extracted from hardware address if it is IPoIB, or empty string
 func GetGUIDFromHwAddr(hwAddr net.HardwareAddr) string {
-	return hwAddr.String()[36:]
+	const IPoIBAddrLength = 20
+	if len(hwAddr) == IPoIBAddrLength {
+		return hwAddr.String()[36:]
+	}
+	return ""
 }
 
 // IsValidGUID check if the guid is valid

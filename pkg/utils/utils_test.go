@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"net"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -65,6 +67,18 @@ var _ = Describe("Utils", func() {
 		It("Assuming not existing vf", func() {
 			_, err := GetVFLinkNamesFromVFID("ib0", 3)
 			Expect(err).To(HaveOccurred(), "Not existing VF should return an error")
+		})
+	})
+	Context("Checking GetGUIDFromHwAddr function", func() {
+		It("Valid IPoIB hardware address", func() {
+			hwAddr, _ := net.ParseMAC("0000.0000.fe80.0000.0000.0000.0200.5e10.0000.0001")
+			guid := GetGUIDFromHwAddr(hwAddr)
+			Expect(guid).To(Equal("02:00:5e:10:00:00:00:01"))
+		})
+		It("Not valid IPoIB hardware address", func() {
+			hwAddr, _ := net.ParseMAC("0000.0000.fe80.0000.0000.0000")
+			guid := GetGUIDFromHwAddr(hwAddr)
+			Expect(guid).To(Equal(""))
 		})
 	})
 })

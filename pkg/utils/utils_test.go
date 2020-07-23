@@ -71,12 +71,12 @@ var _ = Describe("Utils", func() {
 	})
 	Context("Checking GetGUIDFromHwAddr function", func() {
 		It("Valid IPoIB hardware address", func() {
-			hwAddr, _ := net.ParseMAC("0000.0000.fe80.0000.0000.0000.0200.5e10.0000.0001")
+			hwAddr, _ := net.ParseMAC("00:00:00:00:fe:80:00:00:00:00:00:00:02:00:5e:10:00:00:00:01")
 			guid := GetGUIDFromHwAddr(hwAddr)
 			Expect(guid).To(Equal("02:00:5e:10:00:00:00:01"))
 		})
 		It("Not valid IPoIB hardware address", func() {
-			hwAddr, _ := net.ParseMAC("0000.0000.fe80.0000.0000.0000")
+			hwAddr, _ := net.ParseMAC("00:00:00:00:fe:80:00:00")
 			guid := GetGUIDFromHwAddr(hwAddr)
 			Expect(guid).To(Equal(""))
 		})

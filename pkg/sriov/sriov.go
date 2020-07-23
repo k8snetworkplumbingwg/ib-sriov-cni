@@ -247,6 +247,17 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 		if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
 			return err
 		}
+	} else {
+		// Verify VF have valid GUID.
+		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+		if err != nil {
+			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+		}
+
+		guid := utils.GetGUIDFromHwAddr(vfLink.Attrs().HardwareAddr)
+		if guid == "" || utils.IsAllZeroGUID(guid) || utils.IsAllOnesGUID(guid) {
+			return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
+		}
 	}
 
 	return nil

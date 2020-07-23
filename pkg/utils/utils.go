@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,6 +19,8 @@ var (
 	// SysBusPci is sysfs pci device directory
 	SysBusPci = "/sys/bus/pci/devices"
 )
+
+const IPoIBAddrLengthBytes = 20
 
 // GetSriovNumVfs takes in a PF name(ifName) as string and returns number of VF configured as int
 func GetSriovNumVfs(ifName string) (int, error) {
@@ -210,7 +213,16 @@ func CleanCachedNetConf(cRefPath string) error {
 	return nil
 }
 
-// IsValidGUID check if the guild is valid
+// Return GUID string, extracted from hardware address if it is IPoIB, or empty string
+func GetGUIDFromHwAddr(hwAddr net.HardwareAddr) string {
+	if len(hwAddr) == IPoIBAddrLengthBytes {
+		// GUID is lower 8 bytes of hardware address
+		return hwAddr[12:].String()
+	}
+	return ""
+}
+
+// IsValidGUID check if the guid is valid
 func IsValidGUID(guid string) bool {
 	if IsAllZeroGUID(guid) {
 		return false
@@ -223,4 +235,9 @@ func IsValidGUID(guid string) bool {
 // IsAllZeroGUID check if the guid is all zero which is invalid guid
 func IsAllZeroGUID(guid string) bool {
 	return guid == "00:00:00:00:00:00:00:00"
+}
+
+// IsAllOnesGUID check if the guid is all ones
+func IsAllOnesGUID(guid string) bool {
+	return guid == "ff:ff:ff:ff:ff:ff:ff:ff" || guid == "FF:FF:FF:FF:FF:FF:FF:FF"
 }

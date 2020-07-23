@@ -20,6 +20,8 @@ var (
 	SysBusPci = "/sys/bus/pci/devices"
 )
 
+const IPoIBAddrLengthBytes = 20
+
 // GetSriovNumVfs takes in a PF name(ifName) as string and returns number of VF configured as int
 func GetSriovNumVfs(ifName string) (int, error) {
 	var vfTotal int
@@ -213,9 +215,9 @@ func CleanCachedNetConf(cRefPath string) error {
 
 // Return GUID string, extracted from hardware address if it is IPoIB, or empty string
 func GetGUIDFromHwAddr(hwAddr net.HardwareAddr) string {
-	const IPoIBAddrLength = 20
-	if len(hwAddr) == IPoIBAddrLength {
-		return hwAddr.String()[36:]
+	if len(hwAddr) == IPoIBAddrLengthBytes {
+		// GUID is lower 8 bytes of hardware address
+		return hwAddr[12:].String()
 	}
 	return ""
 }

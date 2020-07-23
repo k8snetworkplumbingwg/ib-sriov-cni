@@ -152,6 +152,8 @@ var _ = Describe("Sriov", func() {
 			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
 			err = sm.ApplyVFConfig(netconf)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(netconf.HostIFGUID).To(Equal(""))
+			Expect(netconf.GUID).To(Equal(""))
 		})
 		It("ApplyVFConfig with invalid GUID - wrong characters", func() {
 			mockedNetLinkManger := &mocks.NetlinkManager{}

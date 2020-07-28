@@ -109,6 +109,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	netConf.GUID = getGUIDFromConf(netConf)
 
+	// Ensure GUID was provided if ib-kubernetes integration is enabled
+	if netConf.IBKubernetesEnabled && netConf.GUID == "" {
+		return fmt.Errorf("infiniband SRIOV-CNI failed, Unexpected error. GUID must be provided by ib-kubernetes")
+	}
+
 	if netConf.RdmaIso {
 		err = utils.EnsureRdmaSystemMode()
 		if err != nil {

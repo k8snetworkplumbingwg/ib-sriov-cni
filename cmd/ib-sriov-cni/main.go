@@ -95,7 +95,7 @@ func unlockCNIExecution(lock *flock.Flock) {
 	_ = lock.Unlock()
 }
 
-// Get network config, updated with GUID and device info, and network namespace
+// Get network config, updated with GUID, device info and network namespace.
 func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) {
 	netConf, err := config.LoadConf(args.StdinData)
 	if err != nil {
@@ -123,21 +123,20 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 		}
 	}
 
+	err = config.LoadDeviceInfo(netConf)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get device specific information. %v", err)
+	}
+
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to open netns %q: %v", netns, err)
 	}
-
-	err = config.LoadDeviceInfo(netConf)
-	if err != nil {
-		netns.Close()
-		return nil, nil, fmt.Errorf("failed to get device specific information. %v", err)
-	}
 	return netConf, netns, nil
 }
 
-// Applies VF config and do VF setup. If RDMA configured - moves RDMA device into namespace
-func doVFConfiguration(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.NetNS, args *skel.CmdArgs) error {
+// Applies VF config and performs VF setup. if RdmaIso is configured, moves RDMA device into namespace
+func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.NetNS, args *skel.CmdArgs) error {
 	err := sm.ApplyVFConfig(netConf)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
@@ -168,25 +167,33 @@ func doVFConfiguration(sm localtypes.Manager, netConf *localtypes.NetConf, netns
 
 	err = sm.SetupVF(netConf, args.IfName, args.ContainerID, netns)
 	if err != nil {
-		return fmt.Errorf("failed to set up pod interface %q from the device %q: %v", args.IfName, netConf.Master, err)
+		nsErr := netns.Do(func(_ ns.NetNS) error {
+			_, innerErr := netlink.LinkByName(args.IfName)
+			return innerErr
+		})
+		if nsErr == nil {
+			_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+		}
+		return fmt.Errorf("failed to set up pod interface %q from the device %q: %v",
+			args.IfName, netConf.DeviceID, err)
 	}
 	return nil
 }
 
 // Run the IPAM plugin
-func runIPAMplugin(args *skel.CmdArgs, netConf *localtypes.NetConf, netns ns.NetNS, result **current.Result) error {
+func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (*current.Result, error) {
 	if netConf.IPAM.Type == ipamDHCP {
-		return fmt.Errorf("ipam type dhcp is not supported")
+		return nil, fmt.Errorf("ipam type dhcp is not supported")
 	}
-	r, err := ipam.ExecAdd(netConf.IPAM.Type, args.StdinData)
+	r, err := ipam.ExecAdd(netConf.IPAM.Type, stdinData)
 	if err != nil {
-		return fmt.Errorf("failed to set up IPAM plugin type %q from the device %q: %v",
-			netConf.IPAM.Type, netConf.Master, err)
+		return nil, fmt.Errorf("failed to set up IPAM plugin type %q from the device %q: %v",
+			netConf.IPAM.Type, netConf.DeviceID, err)
 	}
 
 	defer func() {
 		if err != nil {
-			_ = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
+			_ = ipam.ExecDel(netConf.IPAM.Type, stdinData)
 		}
 	}()
 
@@ -194,28 +201,19 @@ func runIPAMplugin(args *skel.CmdArgs, netConf *localtypes.NetConf, netns ns.Net
 	var newResult *current.Result
 	newResult, err = current.NewResultFromResult(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(newResult.IPs) == 0 {
-		return errors.New("IPAM plugin returned missing IP config")
+		return nil, errors.New("IPAM plugin returned missing IP config")
 	}
-
-	newResult.Interfaces = (*result).Interfaces
 
 	for _, ipc := range newResult.IPs {
 		// All addresses apply to the container interface (move from host)
 		ipc.Interface = current.Int(0)
 	}
 
-	err = netns.Do(func(_ ns.NetNS) error {
-		return ipam.ConfigureIface(args.IfName, newResult)
-	})
-	if err != nil {
-		return err
-	}
-	*result = newResult
-	return nil
+	return newResult, nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -234,14 +232,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 	defer unlockCNIExecution(lock)
 
-	err = doVFConfiguration(sm, netConf, netns, args)
+	err = doVFConfig(sm, netConf, netns, args)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err != nil {
-			// restore RDMA device back to default namespace in case of error
-			// Note(adrianc): as there is no logging, we have little visibility if the restore operation failed.
-			if netConf.RdmaIso {
-				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
-			}
 			nsErr := netns.Do(func(_ ns.NetNS) error {
 				_, innerErr := netlink.LinkByName(args.IfName)
 				return innerErr
@@ -249,11 +245,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if nsErr == nil {
 				_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
 			}
+			if netConf.RdmaIso {
+				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
+			}
 		}
 	}()
-	if err != nil {
-		return err
-	}
 
 	result := &current.Result{}
 	result.Interfaces = []*current.Interface{{
@@ -262,15 +258,28 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}}
 
 	if netConf.IPAM.Type != "" {
-		err = runIPAMplugin(args, netConf, netns, &result)
+		var newResult *current.Result
+		newResult, err = runIPAMPlugin(args.StdinData, netConf)
+		if err != nil {
+			return err
+		}
+		// If runIPAMPlugin failed, than ExecDel was called. Defer if no error
 		defer func() {
 			if err != nil {
 				_ = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
 			}
 		}()
+
+		newResult.Interfaces = result.Interfaces
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			return ipam.ConfigureIface(args.IfName, newResult)
+		})
 		if err != nil {
 			return err
 		}
+
+		result = newResult
 	}
 
 	// Cache NetConf for CmdDel

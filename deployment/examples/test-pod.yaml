@@ -7,9 +7,10 @@ metadata:
 spec:
   restartPolicy: OnFailure
   containers:
-    - image: centos/tools
+    - image: mellanox/rping-test
       imagePullPolicy: IfNotPresent
       name: my-test-ctr
+      securityContext:
         capabilities:
           add: [ "IPC_LOCK" ]
       command:

@@ -95,14 +95,15 @@ func unlockCNIExecution(lock *flock.Flock) {
 	_ = lock.Unlock()
 }
 
-func cmdAdd(args *skel.CmdArgs) error {
+// Get network config, updated with GUID, device info and network namespace.
+func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) {
 	netConf, err := config.LoadConf(args.StdinData)
 	if err != nil {
-		return fmt.Errorf("infiniBand SRI-OV CNI failed to load netconf: %v", err)
+		return nil, nil, fmt.Errorf("infiniBand SRI-OV CNI failed to load netconf: %v", err)
 	}
 
 	if netConf.IBKubernetesEnabled && netConf.Args.CNI[infiniBandAnnotation] != configuredInfiniBand {
-		return fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"infiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
 			infiniBandAnnotation, configuredInfiniBand)
 	}
@@ -111,37 +112,32 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	// Ensure GUID was provided if ib-kubernetes integration is enabled
 	if netConf.IBKubernetesEnabled && netConf.GUID == "" {
-		return fmt.Errorf("infiniband SRIOV-CNI failed, Unexpected error. GUID must be provided by ib-kubernetes")
+		return nil, nil, fmt.Errorf(
+			"infiniband SRIOV-CNI failed, Unexpected error. GUID must be provided by ib-kubernetes")
 	}
 
 	if netConf.RdmaIso {
 		err = utils.EnsureRdmaSystemMode()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
+	}
+
+	err = config.LoadDeviceInfo(netConf)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get device specific information. %v", err)
 	}
 
 	netns, err := ns.GetNS(args.Netns)
 	if err != nil {
-		return fmt.Errorf("failed to open netns %q: %v", netns, err)
+		return nil, nil, fmt.Errorf("failed to open netns %q: %v", netns, err)
 	}
-	defer netns.Close()
+	return netConf, netns, nil
+}
 
-	err = config.LoadDeviceInfo(netConf)
-	if err != nil {
-		return fmt.Errorf("failed to get device specific information. %v", err)
-	}
-
-	sm := sriov.NewSriovManager()
-
-	// Lock CNI operation to serialize the operation
-	lock, err := lockCNIExecution()
-	if err != nil {
-		return err
-	}
-	defer unlockCNIExecution(lock)
-
-	err = sm.ApplyVFConfig(netConf)
+// Applies VF config and performs VF setup. if RdmaIso is configured, moves RDMA device into namespace
+func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.NetNS, args *skel.CmdArgs) error {
+	err := sm.ApplyVFConfig(netConf)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
 	}
@@ -169,13 +165,77 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}()
 	}
 
-	result := &current.Result{}
-	result.Interfaces = []*current.Interface{{
-		Name:    args.IfName,
-		Sandbox: netns.Path(),
-	}}
-
 	err = sm.SetupVF(netConf, args.IfName, args.ContainerID, netns)
+	if err != nil {
+		nsErr := netns.Do(func(_ ns.NetNS) error {
+			_, innerErr := netlink.LinkByName(args.IfName)
+			return innerErr
+		})
+		if nsErr == nil {
+			_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+		}
+		return fmt.Errorf("failed to set up pod interface %q from the device %q: %v",
+			args.IfName, netConf.DeviceID, err)
+	}
+	return nil
+}
+
+// Run the IPAM plugin
+func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (*current.Result, error) {
+	if netConf.IPAM.Type == ipamDHCP {
+		return nil, fmt.Errorf("ipam type dhcp is not supported")
+	}
+	r, err := ipam.ExecAdd(netConf.IPAM.Type, stdinData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set up IPAM plugin type %q from the device %q: %v",
+			netConf.IPAM.Type, netConf.DeviceID, err)
+	}
+
+	defer func() {
+		if err != nil {
+			_ = ipam.ExecDel(netConf.IPAM.Type, stdinData)
+		}
+	}()
+
+	// Convert the IPAM result into the current Result type
+	var newResult *current.Result
+	newResult, err = current.NewResultFromResult(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(newResult.IPs) == 0 {
+		return nil, errors.New("IPAM plugin returned missing IP config")
+	}
+
+	for _, ipc := range newResult.IPs {
+		// All addresses apply to the container interface (move from host)
+		ipc.Interface = current.Int(0)
+	}
+
+	return newResult, nil
+}
+
+func cmdAdd(args *skel.CmdArgs) error {
+	netConf, netns, err := getNetConfNetns(args)
+	if err != nil {
+		return err
+	}
+	defer netns.Close()
+
+	sm := sriov.NewSriovManager()
+
+	// Lock CNI operation to serialize the operation
+	lock, err := lockCNIExecution()
+	if err != nil {
+		return err
+	}
+	defer unlockCNIExecution(lock)
+
+	err = doVFConfig(sm, netConf, netns, args)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err != nil {
 			nsErr := netns.Do(func(_ ns.NetNS) error {
@@ -185,47 +245,32 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if nsErr == nil {
 				_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
 			}
+			if netConf.RdmaIso {
+				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
+			}
 		}
 	}()
-	if err != nil {
-		return fmt.Errorf("failed to set up pod interface %q from the device %q: %v", args.IfName, netConf.Master, err)
-	}
 
-	// run the IPAM plugin
+	result := &current.Result{}
+	result.Interfaces = []*current.Interface{{
+		Name:    args.IfName,
+		Sandbox: netns.Path(),
+	}}
+
 	if netConf.IPAM.Type != "" {
-		if netConf.IPAM.Type == ipamDHCP {
-			return fmt.Errorf("ipam type dhcp is not supported")
-		}
-		var r types.Result
-		r, err = ipam.ExecAdd(netConf.IPAM.Type, args.StdinData)
+		var newResult *current.Result
+		newResult, err = runIPAMPlugin(args.StdinData, netConf)
 		if err != nil {
-			return fmt.Errorf("failed to set up IPAM plugin type %q from the device %q: %v",
-				netConf.IPAM.Type, netConf.Master, err)
+			return err
 		}
-
+		// If runIPAMPlugin failed, than ExecDel was called. Defer if no error
 		defer func() {
 			if err != nil {
 				_ = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
 			}
 		}()
 
-		// Convert the IPAM result into the current Result type
-		var newResult *current.Result
-		newResult, err = current.NewResultFromResult(r)
-		if err != nil {
-			return err
-		}
-
-		if len(newResult.IPs) == 0 {
-			return errors.New("IPAM plugin returned missing IP config")
-		}
-
 		newResult.Interfaces = result.Interfaces
-
-		for _, ipc := range newResult.IPs {
-			// All addresses apply to the container interface (move from host)
-			ipc.Interface = current.Int(0)
-		}
 
 		err = netns.Do(func(_ ns.NetNS) error {
 			return ipam.ConfigureIface(args.IfName, newResult)
@@ -233,6 +278,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if err != nil {
 			return err
 		}
+
 		result = newResult
 	}
 

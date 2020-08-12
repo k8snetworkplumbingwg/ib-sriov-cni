@@ -60,14 +60,14 @@ linters:
     - dogsled
     - dupl
     - errcheck
-    #- funlen - TODO: enable once CmdAdd has been refactored
+    - funlen
     - gochecknoinits
     - goconst
     - gocritic
-    #- gocognit - TODO: enable once CmdAdd has been refactored
+    - gocognit
     - gofmt
     - goimports
-    - golint 
+    - golint
     - gomnd
     - goprintffuncname
     - gosec

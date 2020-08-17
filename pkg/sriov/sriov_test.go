@@ -503,6 +503,7 @@ var _ = Describe("Sriov", func() {
 			fakeLink := &FakeLink{netlink.LinkAttrs{}}
 			netconf.HostIFGUID = "01:23:45:67:89:ab:cd:ef"
 
+			mockedNetLinkManger.On("LinkSetName", fakeLink, netconf.HostIFNames).Return(nil)
 			mockedNetLinkManger.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
 			mockedNetLinkManger.On("LinkSetVfNodeGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)
 			mockedNetLinkManger.On("LinkSetVfPortGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)
@@ -531,6 +532,7 @@ var _ = Describe("Sriov", func() {
 			fakeLink := &FakeLink{netlink.LinkAttrs{}}
 			netconf.HostIFGUID = "00:00:00:00:00:00:00:00"
 
+			mockedNetLinkManger.On("LinkSetName", fakeLink, netconf.HostIFNames).Return(nil)
 			mockedNetLinkManger.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
 			mockedNetLinkManger.On("LinkSetVfNodeGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)
 			mockedNetLinkManger.On("LinkSetVfPortGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)

@@ -1,9 +1,9 @@
-# github.com/Mellanox/rdma-cni v1.0.0
+# github.com/Mellanox/rdma-cni v1.0.1
 github.com/Mellanox/rdma-cni/pkg/rdma
 github.com/Mellanox/rdma-cni/pkg/types
 # github.com/Mellanox/rdmamap v1.0.0
 github.com/Mellanox/rdmamap
-# github.com/Mellanox/sriovnet v1.0.1
+# github.com/Mellanox/sriovnet v1.0.2
 github.com/Mellanox/sriovnet
 github.com/Mellanox/sriovnet/pkg/utils/filesystem
 # github.com/containernetworking/cni v0.7.1
@@ -69,7 +69,7 @@ github.com/onsi/gomega/types
 github.com/pmezard/go-difflib/difflib
 # github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 github.com/safchain/ethtool
-# github.com/spf13/afero v1.2.2
+# github.com/spf13/afero v1.4.1
 github.com/spf13/afero
 github.com/spf13/afero/mem
 # github.com/stretchr/objx v0.2.1-0.20190415111823-35313a95ee26
@@ -88,7 +88,7 @@ golang.org/x/net/html/atom
 golang.org/x/net/html/charset
 # golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775
 golang.org/x/sys/unix
-# golang.org/x/text v0.3.0
+# golang.org/x/text v0.3.3
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
 golang.org/x/text/encoding/htmlindex
@@ -99,6 +99,8 @@ golang.org/x/text/encoding/korean
 golang.org/x/text/encoding/simplifiedchinese
 golang.org/x/text/encoding/traditionalchinese
 golang.org/x/text/encoding/unicode
+golang.org/x/text/internal/language
+golang.org/x/text/internal/language/compact
 golang.org/x/text/internal/tag
 golang.org/x/text/internal/utf8internal
 golang.org/x/text/language

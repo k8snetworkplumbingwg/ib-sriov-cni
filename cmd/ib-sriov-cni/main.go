@@ -104,7 +104,7 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 
 	if netConf.IBKubernetesEnabled && netConf.Args.CNI[infiniBandAnnotation] != configuredInfiniBand {
 		return nil, nil, fmt.Errorf(
-			"infiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernets",
+			"infiniBand SRIOV-CNI failed, InfiniBand status \"%s\" is not \"%s\" please check mellanox ib-kubernetes",
 			infiniBandAnnotation, configuredInfiniBand)
 	}
 

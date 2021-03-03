@@ -1,7 +1,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Mellanox/ib-sriov-cni)](https://goreportcard.com/report/github.com/Mellanox/ib-sriov-cni)
-[![Build Status](https://travis-ci.com/Mellanox/ib-sriov-cni.svg?branch=master)](https://travis-ci.com/Mellanox/ib-sriov-cni)
-[![Coverage Status](https://coveralls.io/repos/github/Mellanox/ib-sriov-cni/badge.svg)](https://coveralls.io/github/Mellanox/ib-sriov-cni)
+[![Go Report Card](https://goreportcard.com/badge/github.com/k8snetworkplumbingwg/ib-sriov-cni)](https://goreportcard.com/report/github.com/k8snetworkplumbingwg/ib-sriov-cni)
+[![Build Status](https://api.travis-ci.org/k8snetworkplumbingwg/ib-sriov-cni.svg?branch=master)](https://api.travis-ci.org/k8snetworkplumbingwg/ib-sriov-cni.svg?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/k8snetworkplumbingwg/ib-sriov-cni/badge.svg)](https://coveralls.io/github/k8snetworkplumbingwg/ib-sriov-cni)
 
    * [InfiniBand SR-IOV CNI plugin](#infiniband-sr-iov-cni-plugin)
       * [Build](#build)

@@ -5,7 +5,7 @@ go 1.13
 require (
 	github.com/Mellanox/rdma-cni v1.0.1
 	github.com/Mellanox/sriovnet v1.0.2
-	github.com/containernetworking/cni v0.7.1
+	github.com/containernetworking/cni v0.8.1
 	github.com/containernetworking/plugins v0.8.5
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/gofrs/flock v0.7.1

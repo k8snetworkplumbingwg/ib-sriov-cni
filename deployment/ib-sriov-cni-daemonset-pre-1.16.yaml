@@ -23,51 +23,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: kube-ib-sriov-cni
-          image: mellanox/ib-sriov-cni
-          imagePullPolicy: IfNotPresent
-          securityContext:
-            privileged: true
-          resources:
-            requests:
-              cpu: "100m"
-              memory: "50Mi"
-            limits:
-              cpu: "100m"
-              memory: "50Mi"
-          volumeMounts:
-            - name: cnibin
-              mountPath: /host/opt/cni/bin
-      volumes:
-        - name: cnibin
-          hostPath:
-            path: /opt/cni/bin
-
----
-apiVersion: extensions/v1beta1
-kind: DaemonSet
-metadata:
-  name: kube-ib-sriov-cni-ds-ppc64le
-  namespace: kube-system
-  labels:
-    tier: node
-    app: ib-sriov-cni
-spec:
-  template:
-    metadata:
-      labels:
-        tier: node
-        app: ib-sriov-cni
-    spec:
-      hostNetwork: true
-      nodeSelector:
-        beta.kubernetes.io/arch: ppc64le
-      tolerations:
-        - key: node-role.kubernetes.io/master
-          operator: Exists
-          effect: NoSchedule
-      containers:
-        - name: kube-ib-sriov-cni
-          image: mellanox/ib-sriov-cni:ppc64le
+          image: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true

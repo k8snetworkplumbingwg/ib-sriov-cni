@@ -12,6 +12,11 @@ import (
 	"path/filepath"
 )
 
+const (
+	OwnerReadWriteExecuteOthersReadExecuteAttrs = 0755
+	OwnerReadWriteOthersReadAttrs               = 0644
+)
+
 func check(e error) {
 	if e != nil {
 		panic(e)
@@ -83,12 +88,12 @@ func CreateTmpSysFs() error {
 	ts.dirRoot = tmpdir
 
 	for _, dir := range ts.dirList {
-		if err := os.MkdirAll(filepath.Join(ts.dirRoot, dir), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Join(ts.dirRoot, dir), OwnerReadWriteExecuteOthersReadExecuteAttrs); err != nil {
 			return err
 		}
 	}
 	for filename, body := range ts.fileList {
-		if err := ioutil.WriteFile(filepath.Join(ts.dirRoot, filename), body, 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(ts.dirRoot, filename), body, OwnerReadWriteOthersReadAttrs); err != nil {
 			return err
 		}
 	}
@@ -117,7 +122,7 @@ func CreateTmpSysFs() error {
 }
 
 func createSymlinks(link, target string) error {
-	if err := os.MkdirAll(target, 0755); err != nil {
+	if err := os.MkdirAll(target, OwnerReadWriteExecuteOthersReadExecuteAttrs); err != nil {
 		return err
 	}
 	if err := os.Symlink(target, link); err != nil {

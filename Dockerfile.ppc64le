@@ -1,4 +1,4 @@
-FROM ppc64le/golang:alpine as builder
+FROM ppc64le/golang:1.18-alpine as builder
 
 COPY . /usr/src/ib-sriov-cni
 

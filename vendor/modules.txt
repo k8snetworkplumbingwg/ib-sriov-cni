@@ -1,12 +1,16 @@
 # github.com/Mellanox/rdma-cni v1.0.1
+## explicit; go 1.13
 github.com/Mellanox/rdma-cni/pkg/rdma
 github.com/Mellanox/rdma-cni/pkg/types
 # github.com/Mellanox/rdmamap v1.0.0
+## explicit; go 1.13
 github.com/Mellanox/rdmamap
 # github.com/Mellanox/sriovnet v1.0.2
+## explicit; go 1.13
 github.com/Mellanox/sriovnet
 github.com/Mellanox/sriovnet/pkg/utils/filesystem
 # github.com/containernetworking/cni v0.8.1
+## explicit
 github.com/containernetworking/cni/pkg/invoke
 github.com/containernetworking/cni/pkg/skel
 github.com/containernetworking/cni/pkg/types
@@ -15,26 +19,33 @@ github.com/containernetworking/cni/pkg/types/current
 github.com/containernetworking/cni/pkg/utils
 github.com/containernetworking/cni/pkg/version
 # github.com/containernetworking/plugins v0.8.5
+## explicit; go 1.12
 github.com/containernetworking/plugins/pkg/ip
 github.com/containernetworking/plugins/pkg/ipam
 github.com/containernetworking/plugins/pkg/ns
 github.com/containernetworking/plugins/pkg/utils/hwaddr
 github.com/containernetworking/plugins/pkg/utils/sysctl
 # github.com/coreos/go-iptables v0.4.5
+## explicit
 github.com/coreos/go-iptables/iptables
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+## explicit
 github.com/davecgh/go-spew/spew
 # github.com/gofrs/flock v0.7.1
+## explicit
 github.com/gofrs/flock
 # github.com/google/uuid v1.1.1
+## explicit
 github.com/google/uuid
 # github.com/hpcloud/tail v1.0.0
+## explicit
 github.com/hpcloud/tail
 github.com/hpcloud/tail/ratelimiter
 github.com/hpcloud/tail/util
 github.com/hpcloud/tail/watch
 github.com/hpcloud/tail/winfile
 # github.com/onsi/ginkgo v1.12.0
+## explicit; go 1.12
 github.com/onsi/ginkgo
 github.com/onsi/ginkgo/config
 github.com/onsi/ginkgo/internal/codelocation
@@ -54,6 +65,7 @@ github.com/onsi/ginkgo/reporters/stenographer/support/go-colorable
 github.com/onsi/ginkgo/reporters/stenographer/support/go-isatty
 github.com/onsi/ginkgo/types
 # github.com/onsi/gomega v1.9.0
+## explicit
 github.com/onsi/gomega
 github.com/onsi/gomega/format
 github.com/onsi/gomega/internal/assertion
@@ -67,29 +79,39 @@ github.com/onsi/gomega/matchers/support/goraph/node
 github.com/onsi/gomega/matchers/support/goraph/util
 github.com/onsi/gomega/types
 # github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+## explicit
 github.com/pmezard/go-difflib/difflib
 # github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
+## explicit
 github.com/safchain/ethtool
 # github.com/spf13/afero v1.4.1
+## explicit; go 1.13
 github.com/spf13/afero
 github.com/spf13/afero/mem
 # github.com/stretchr/objx v0.2.1-0.20190415111823-35313a95ee26
+## explicit; go 1.12
 github.com/stretchr/objx
 # github.com/stretchr/testify v1.5.1
+## explicit; go 1.13
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/mock
 # github.com/vishvananda/netlink v1.1.0
+## explicit; go 1.12
 github.com/vishvananda/netlink
 github.com/vishvananda/netlink/nl
 # github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df
+## explicit; go 1.12
 github.com/vishvananda/netns
 # golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+## explicit; go 1.11
 golang.org/x/net/html
 golang.org/x/net/html/atom
 golang.org/x/net/html/charset
 # golang.org/x/sys v0.0.0-20200327173247-9dae0f8f5775
+## explicit; go 1.12
 golang.org/x/sys/unix
 # golang.org/x/text v0.3.3
+## explicit; go 1.11
 golang.org/x/text/encoding
 golang.org/x/text/encoding/charmap
 golang.org/x/text/encoding/htmlindex
@@ -108,12 +130,16 @@ golang.org/x/text/language
 golang.org/x/text/runes
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
-# golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
+# golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898
+## explicit; go 1.11
 golang.org/x/xerrors
 golang.org/x/xerrors/internal
 # gopkg.in/fsnotify.v1 v1.4.7
+## explicit
 gopkg.in/fsnotify.v1
 # gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
+## explicit
 gopkg.in/tomb.v1
 # gopkg.in/yaml.v2 v2.2.8
+## explicit
 gopkg.in/yaml.v2

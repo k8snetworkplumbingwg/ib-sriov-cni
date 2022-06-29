@@ -65,7 +65,7 @@ func lockCNIExecution() (*flock.Flock, error) {
 	// As the mapping of RDMA resources is done in Device plugin prior to CNI invocation, it must not change here.
 	// We serialize the CNI's operation causing kernel to allocate the VF's RDMA resources under the same name.
 	// In the future, Systems should use udev PCI based RDMA device names, ensuring consistent RDMA resources names.
-	err := os.MkdirAll(config.CniFileLockDir, 0700)
+	err := os.MkdirAll(config.CniFileLockDir, utils.OwnerReadWriteExecuteAttrs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ib-sriov-cni lock file directory(%q): %v", config.CniFileLockDir, err)
 	}

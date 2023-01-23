@@ -298,7 +298,10 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	netConf, cRefPath, err := config.LoadConfFromCache(args)
 	if err != nil {
-		return err
+		// According to the CNI spec, a DEL action should complete without errors
+		// even if there are some resources missing. For more details, see
+		// https://github.com/containernetworking/cni/blob/main/SPEC.md#del-remove-container-from-network-or-un-apply-modifications
+		return nil
 	}
 
 	defer func() {

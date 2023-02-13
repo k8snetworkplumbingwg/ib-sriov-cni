@@ -1,7 +1,7 @@
 # Package related
 BINARY_NAME=ib-sriov
 PACKAGE=ib-sriov-cni
-ORG_PATH=github.com/Mellanox
+ORG_PATH=github.com/k8snetworkplumbingwg
 REPO_PATH=$(ORG_PATH)/$(PACKAGE)
 GOPATH=$(CURDIR)/.gopath
 GOBIN =$(CURDIR)/bin
@@ -24,7 +24,7 @@ LDFLAGS="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE
 IMAGE_BUILDER?=@docker
 IMAGEDIR=$(BASE)/images
 DOCKERFILE?=$(CURDIR)/Dockerfile
-TAG?=mellanox/ib-sriov-cni
+TAG?=k8snetworkplumbingwg/ib-sriov-cni
 IMAGE_BUILD_OPTS?=
 # Accept proxy settings for docker
 # To pass proxy for Docker invoke it as 'make image HTTP_POXY=http://192.168.0.1:8080'
@@ -43,7 +43,7 @@ GOLANGCI_LINT = $(GOBIN)/golangci-lint
 # golangci-lint version should be updated periodically
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
-GOLANGCI_LINT_VER = v1.23.8
+GOLANGCI_LINT_VER = v1.46.2
 TIMEOUT = 15
 Q = $(if $(filter 1,$V),,@)
 
@@ -67,22 +67,19 @@ $(BUILDDIR)/$(BINARY_NAME): $(GOFILES) | $(BUILDDIR)
 	@cd $(BASE)/cmd/$(PACKAGE) && CGO_ENABLED=0 $(GO) build -o $(BUILDDIR)/$(BINARY_NAME) -tags no_openssl -ldflags $(LDFLAGS) -v
 
 # Tools
-$(GOLANGCI_LINT): | $(BASE) ; $(info  building golangci-lint...)
-	$Q curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) $(GOLANGCI_LINT_VER)
+$(GOLANGCI_LINT): ; $(info  installing golangci-lint...)
+	$Q go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER)
+
 
 GOVERALLS = $(GOBIN)/goveralls
 $(GOBIN)/goveralls: | $(BASE) ; $(info  building goveralls...)
-	$Q go get github.com/mattn/goveralls
+	$Q go install github.com/mattn/goveralls
 
 # Tests
 
 .PHONY: lint
-lint: | $(BASE) $(GOLANGCI_LINT) ; $(info  running golangci-lint...) @ ## Run golangci-lint
-	$Q mkdir -p $(BASE)/test
-	$Q cd $(BASE) && ret=0 && \
-		test -z "$$($(GOLANGCI_LINT) run | tee $(BASE)/test/lint.out)" || ret=1 ; \
-		cat $(BASE)/test/lint.out ; rm -rf $(BASE)/test ; \
-	 exit $$ret
+lint: | $(GOLANGCI_LINT) ; $(info  running golangci-lint...) @ ## Run golangci-lint
+	$Q $(GOLANGCI_LINT) run --timeout=5m
 
 TEST_TARGETS := test-default test-bench test-short test-verbose test-race
 .PHONY: $(TEST_TARGETS) test-xml check test tests

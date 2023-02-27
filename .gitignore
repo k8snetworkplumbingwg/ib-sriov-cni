@@ -1,0 +1,6 @@
+# Files
+.gopath
+
+# Folders
+build/
+bin/

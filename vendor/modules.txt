@@ -34,6 +34,8 @@ github.com/davecgh/go-spew/spew
 # github.com/gofrs/flock v0.7.1
 ## explicit
 github.com/gofrs/flock
+# github.com/golang/protobuf v1.5.2
+## explicit; go 1.9
 # github.com/google/uuid v1.1.1
 ## explicit
 github.com/google/uuid
@@ -130,7 +132,7 @@ golang.org/x/text/language
 golang.org/x/text/runes
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
-# golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7
+# golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543
 ## explicit; go 1.11
 golang.org/x/xerrors
 golang.org/x/xerrors/internal

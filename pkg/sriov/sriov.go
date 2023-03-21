@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/Mellanox/sriovnet"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/k8snetworkplumbingwg/sriovnet"
 	"github.com/vishvananda/netlink"
 
 	"github.com/Mellanox/ib-sriov-cni/pkg/types"

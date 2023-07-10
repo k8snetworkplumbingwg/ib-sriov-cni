@@ -71,10 +71,6 @@ $(GOLANGCI_LINT): ; $(info  installing golangci-lint...)
 	$Q go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER)
 
 
-GOVERALLS = $(GOBIN)/goveralls
-$(GOBIN)/goveralls: | $(BASE) ; $(info  building goveralls...)
-	$Q go install github.com/mattn/goveralls
-
 # Tests
 
 .PHONY: lint
@@ -96,11 +92,19 @@ test-xml: lint | $(BASE) $(GO2XUNIT) ; $(info  running $(NAME:%=% )tests...) @ #
 	$Q cd $(BASE) && 2>&1 $(GO) test -timeout 20s -v $(TESTPKGS) | tee test/tests.output
 	$(GO2XUNIT) -fail -input test/tests.output -output test/tests.xml
 
+GOVERALLS = $(BINDIR)/goveralls
+$(GOVERALLS): | $(BASE) ; $(info  installing goveralls...)
+	$(call go-install-tool,$(GOVERALLS),github.com/mattn/goveralls@latest)
+
 COVERAGE_MODE = count
-.PHONY: test-coverage test-coverage-tools
+COVER_PROFILE = ib-sriov-cni.cover
 test-coverage-tools: | $(GOVERALLS)
 test-coverage: test-coverage-tools | $(BASE) ; $(info  running coverage tests...) @ ## Run coverage tests
-	$Q cd $(BASE); $(GO) test -covermode=$(COVERAGE_MODE) -coverprofile=ib-sriov-cni.cover ./...
+	$Q $(GO) test -covermode=$(COVERAGE_MODE) -coverprofile=$(COVER_PROFILE) ./...
+
+.PHONY: upload-coverage
+upload-coverage: test-coverage-tools | $(BASE) ; $(info  uploading coverage results...) @ ## Upload coverage report
+	$(GOVERALLS) -coverprofile=$(COVER_PROFILE) -service=github
 
 # Container image
 .PHONY: image

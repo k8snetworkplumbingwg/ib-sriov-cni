@@ -22,7 +22,7 @@ COMMIT?=`git rev-parse --verify HEAD`
 LDFLAGS="-X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)"
 
 # Docker
-IMAGE_BUILDER?=@docker
+IMAGE_BUILDER?=docker
 IMAGEDIR=$(BASE)/images
 DOCKERFILE?=$(CURDIR)/Dockerfile
 TAG?=k8snetworkplumbingwg/ib-sriov-cni
@@ -126,12 +126,15 @@ shellcheck: $(BASE) $(SHELLCHECK_TOOL); $(info  running shellcheck...) @ ## Run 
 # Container image
 .PHONY: image
 image: | $(BASE) ; $(info Building Docker image...)  ## Build conatiner image
-	$(IMAGE_BUILDER) build -t $(TAG) -f $(DOCKERFILE)  $(CURDIR) $(IMAGE_BUILD_OPTS)
+	@$(IMAGE_BUILDER) build -t $(TAG) -f $(DOCKERFILE)  $(CURDIR) $(IMAGE_BUILD_OPTS)
 
 # Dependency management
 .PHONY: deps-update
 deps-update: ; $(info  updating dependencies...)
 	go mod tidy && go mod vendor
+
+test-image: image
+	$Q $(BASE)/images/image_test.sh $(IMAGE_BUILDER) $(TAG)
 
 # Misc
 

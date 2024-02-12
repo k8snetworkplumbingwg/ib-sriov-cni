@@ -6,6 +6,7 @@ set -e
 # Set known directories.
 CNI_BIN_DIR="/host/opt/cni/bin"
 IB_SRIOV_CNI_BIN_FILE="/usr/bin/ib-sriov"
+NO_SLEEP=0
 
 # Give help text for parameters.
 usage()
@@ -18,6 +19,7 @@ usage()
     printf "\t-h --help\n"
     printf "\t--cni-bin-dir=%s\n" "$CNI_BIN_DIR"
     printf "\t--ib-sriov-cni-bin-file=%s\n" "$IB_SRIOV_CNI_BIN_FILE"
+    printf "\t--no-sleep\n"
 }
 
 # Parse parameters given as arguments to this script.
@@ -34,6 +36,9 @@ while [ "$1" != "" ]; do
             ;;
         --ib-sriov-cni-bin-file)
             IB_SRIOV_CNI_BIN_FILE=$VALUE
+            ;;
+        --no-sleep)
+            NO_SLEEP=1
             ;;
         *)
             /bin/echo "ERROR: unknown parameter \"$PARAM\""
@@ -56,6 +61,10 @@ done
 
 # Copy file into proper place.
 cp -f "$IB_SRIOV_CNI_BIN_FILE" "$CNI_BIN_DIR"
+
+if [ $NO_SLEEP -eq 1 ]; then
+  exit 0
+fi
 
 echo "Entering sleep... (success)"
 trap : TERM INT

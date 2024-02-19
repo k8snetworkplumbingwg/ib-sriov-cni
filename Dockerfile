@@ -5,7 +5,7 @@ COPY . /usr/src/ib-sriov-cni
 ENV HTTP_PROXY $http_proxy
 ENV HTTPS_PROXY $https_proxy
 
-RUN apk add --no-cache --virtual build-dependencies build-base=~0.5 linux-headers=~6.3
+RUN apk add --no-cache --virtual build-dependencies build-base=~0.5
 WORKDIR /usr/src/ib-sriov-cni
 RUN make clean && \
     make build

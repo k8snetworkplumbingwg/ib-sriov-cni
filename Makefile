@@ -58,8 +58,10 @@ GOLANGCI_LINT = $(BINDIR)/golangci-lint
 # in case of a version bump
 GOLANGCI_LINT_VER = v1.51.2
 TIMEOUT = 15
+export GOLANGCI_LINT_CACHE = $(BUILDDIR)/.cache
+
 $(GOLANGCI_LINT): | $(BINDIR) ; $(info  installing golangci-lint...)
-	$Q GOBIN=$(BINDIR) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER)
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
 
 GOVERALLS = $(BINDIR)/goveralls
 $(GOVERALLS): | $(BINDIR) ; $(info  installing goveralls...)
@@ -156,5 +158,14 @@ mv $(1)/shellcheck*/shellcheck $(1)/shellcheck;\
 chmod +x $(1)/shellcheck;\
 rm -r $(1)/shellcheck*/;\
 rm $(1)/shellcheck.tar.xz;\
+}
+endef
+
+# go-install-tool will 'go install' any package $2 and install it to $1.
+define go-install-tool
+@[ -f $(1) ] || { \
+set -e ;\
+echo "Downloading $(2)" ;\
+GOBIN=$(BINDIR) go install -mod=mod $(2) ;\
 }
 endef

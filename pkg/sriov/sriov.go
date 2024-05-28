@@ -8,8 +8,8 @@ import (
 	"github.com/k8snetworkplumbingwg/sriovnet"
 	"github.com/vishvananda/netlink"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/types"
-	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/types"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/utils"
 )
 
 // MyNetlink NetlinkManager

@@ -7,7 +7,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 
-	rdmatypes "github.com/Mellanox/rdma-cni/pkg/types"
+	rdmatypes "github.com/k8snetworkplumbingwg/rdma-cni/pkg/types"
 )
 
 // NetConf extends types.NetConf for ib-sriov-cni

@@ -3,10 +3,10 @@ package sriov
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/utils"
 )
 
 func check(e error) {

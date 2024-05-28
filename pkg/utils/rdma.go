@@ -3,8 +3,8 @@ package utils
 import (
 	"fmt"
 
-	"github.com/Mellanox/rdma-cni/pkg/rdma"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/k8snetworkplumbingwg/rdma-cni/pkg/rdma"
 )
 
 var rdmaManager = rdma.NewRdmaManager()

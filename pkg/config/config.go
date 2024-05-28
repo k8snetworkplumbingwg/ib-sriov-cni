@@ -8,8 +8,8 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/types"
-	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/types"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/utils"
 )
 
 var (

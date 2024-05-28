@@ -8,8 +8,8 @@ GOBIN =$(CURDIR)/bin
 BINDIR=$(CURDIR)/bin
 BUILDDIR=$(CURDIR)/build
 BASE=$(GOPATH)/src/$(REPO_PATH)
-GOFILES=$(shell find . -name *.go | grep -vE "(\/vendor\/)|(_test.go)")
-PKGS=$(or $(PKG),$(shell cd $(BASE) && env GOPATH=$(GOPATH) $(GO) list ./... | grep -v "^$(PACKAGE)/vendor/"))
+GOFILES=$(shell find . -name *.go | grep -vE "(_test.go)")
+PKGS=$(or $(PKG),$(shell cd $(BASE) && env GOPATH=$(GOPATH) $(GO) list ./...))
 TESTPKGS = $(shell env GOPATH=$(GOPATH) $(GO) list -f '{{ if or .TestGoFiles .XTestGoFiles }}{{ .ImportPath }}{{ end }}' $(PKGS))
 
 export GOPATH
@@ -131,7 +131,7 @@ image: | $(BASE) ; $(info Building Docker image...)  ## Build conatiner image
 # Dependency management
 .PHONY: deps-update
 deps-update: ; $(info  updating dependencies...)
-	go mod tidy && go mod vendor
+	go mod tidy
 
 test-image: image
 	$Q $(BASE)/images/image_test.sh $(IMAGE_BUILDER) $(TAG)

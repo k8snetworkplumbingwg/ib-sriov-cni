@@ -1,8 +1,7 @@
 # Files
 .gopath
-.cover
+*.cover
 
 # Folders
 build/
 bin/
-vendor/

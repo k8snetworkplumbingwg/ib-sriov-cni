@@ -19,10 +19,10 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/vishvananda/netlink"
 
-	"github.com/Mellanox/ib-sriov-cni/pkg/config"
-	"github.com/Mellanox/ib-sriov-cni/pkg/sriov"
-	localtypes "github.com/Mellanox/ib-sriov-cni/pkg/types"
-	"github.com/Mellanox/ib-sriov-cni/pkg/utils"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/config"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/sriov"
+	localtypes "github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/types"
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/utils"
 )
 
 const (
@@ -272,6 +272,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		newResult.Interfaces = result.Interfaces
 
+		for _, ipc := range newResult.IPs {
+			// only a single interface is handled by ib-sriov-cni, point ip IPConfig.Interface to it.
+			ipc.Interface = current.Int(0)
+		}
+
 		err = netns.Do(func(_ ns.NetNS) error {
 			return ipam.ConfigureIface(args.IfName, newResult)
 		})
@@ -396,5 +401,5 @@ func main() {
 	}
 
 	skel.PluginMain(cmdAdd, cmdCheck, cmdDel,
-		cniVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1", "0.4.0"), "")
+		cniVersion.All, "")
 }

@@ -386,6 +386,26 @@ var _ = Describe("Sriov", func() {
 			err := sm.SetupVF(netconf, podifName, contID, targetNetNS)
 			Expect(err).To(HaveOccurred())
 		})
+		It("Remove altName", func() {
+			targetNetNS := newFakeNs()
+			mocked := &mocks.NetlinkManager{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{
+				Index:    1000,
+				Name:     "dummylink",
+				AltNames: []string{"enp175s6"},
+			}}
+
+			mocked.On("LinkByName", mock.AnythingOfType("string")).Return(fakeLink, nil)
+			mocked.On("LinkSetDown", fakeLink).Return(nil)
+			mocked.On("LinkSetName", fakeLink, mock.Anything).Return(nil)
+			mocked.On("LinkDelAltName", fakeLink, "enp175s6").Return(nil)
+			mocked.On("LinkSetNsFd", fakeLink, mock.AnythingOfType("int")).Return(nil)
+			mocked.On("LinkSetUp", fakeLink).Return(nil)
+			sm := sriovManager{nLink: mocked}
+			err := sm.SetupVF(netconf, podifName, contID, targetNetNS)
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 	Context("Checking ReleaseVF function", func() {
 		var (

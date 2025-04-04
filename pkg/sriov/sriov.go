@@ -56,6 +56,11 @@ func (n *MyNetlink) LinkSetVfNodeGUID(link netlink.Link, vf int, nodeGUID net.Ha
 	return netlink.LinkSetVfNodeGUID(link, vf, nodeGUID)
 }
 
+// LinkDelAltName using NetlinkManager
+func (n *MyNetlink) LinkDelAltName(link netlink.Link, altName string) error {
+	return netlink.LinkDelAltName(link, altName)
+}
+
 type pciUtilsImpl struct{}
 
 func (p *pciUtilsImpl) GetSriovNumVfs(ifName string) (int, error) {
@@ -139,18 +144,31 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName, cid string, netns
 		return fmt.Errorf("error setting temp IF name %s for %s", tempName, linkName)
 	}
 
-	// 3. Change netns
+	// 3. Remove alt name from the nic
+	linkObj, err = s.nLink.LinkByName(tempName)
+	if err != nil {
+		return fmt.Errorf("error getting VF netdevice with name %s: %v", tempName, err)
+	}
+	for _, altName := range linkObj.Attrs().AltNames {
+		if altName == linkName {
+			if err := s.nLink.LinkDelAltName(linkObj, linkName); err != nil {
+				return fmt.Errorf("error removing VF altname %s: %v", linkName, err)
+			}
+		}
+	}
+
+	// 4. Change netns
 	if err := s.nLink.LinkSetNsFd(linkObj, int(netns.Fd())); err != nil {
 		return fmt.Errorf("failed to move IF %s to netns: %q", tempName, err)
 	}
 
 	if err := netns.Do(func(_ ns.NetNS) error {
-		// 4. Set Pod IF name
+		// 5. Set Pod IF name
 		if err := s.nLink.LinkSetName(linkObj, podifName); err != nil {
 			return fmt.Errorf("error setting container interface name %s for %s", linkName, tempName)
 		}
 
-		// 5. Bring IF up in Pod netns
+		// 6. Bring IF up in Pod netns
 		if err := s.nLink.LinkSetUp(linkObj); err != nil {
 			return fmt.Errorf("error bringing interface up in container ns: %q", err)
 		}

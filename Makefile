@@ -62,7 +62,7 @@ GOLANGCI_LINT = $(BINDIR)/golangci-lint
 # golangci-lint version should be updated periodically
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
-GOLANGCI_LINT_VER = v1.51.2
+GOLANGCI_LINT_VER = v1.64.8
 TIMEOUT = 15
 export GOLANGCI_LINT_CACHE = $(BUILDDIR)/.cache
 

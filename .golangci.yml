@@ -1,6 +1,17 @@
+run:
+  timeout: 3m
+
 linters-settings:
+  depguard:
+    list-type: blacklist
+    packages:
+      # logging is allowed only by logutils.Log, logrus
+      # is allowed to use only in logutils package
+      - github.com/sirupsen/logrus
+    packages-with-error-message:
+      - github.com/sirupsen/logrus: "logging is allowed only by logutils.Log"
   dupl:
-    threshold: 150
+    threshold: 100
   funlen:
     lines: 100
     statements: 50
@@ -21,23 +32,22 @@ linters-settings:
       - whyNoLint
       - wrapperFunc
       - unnamedResult
-  gocognit:
-    min-complexity: 30
+    settings:
+      hugeParam:
+        sizeThreshold: 512
+      rangeValCopy:
+        sizeThreshold: 512
+  gocyclo:
+    min-complexity: 15
   goimports:
-    local-prefixes: github.com/Mellanox/ib-sriov-cni
+    local-prefixes: github.com/k8snetworkplumbingwg/ib-sriov-cni
   gomnd:
     settings:
       mnd:
         # don't include the "operation" and "assign"
-        checks: [argument,case,condition,return]
-  govet:
-    check-shadowing: true
-    settings:
-      printf:
-        funcs:
-          - (github.com/rs/zerolog/zerolog.Event).Msgf
+        checks: argument,case,condition,return
   lll:
-    line-length: 120
+    line-length: 140
   misspell:
     locale: US
   prealloc:
@@ -53,19 +63,18 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - depguard
     - dogsled
     - dupl
     - errcheck
-    - exportloopref
+    - copyloopvar
+    - exhaustive
     - funlen
-    - gochecknoinits
     - goconst
     - gocritic
-    - gocognit
+    - gocyclo
     - gofmt
     - goimports
-    - gomnd
+    - mnd
     - goprintffuncname
     - gosec
     - gosimple
@@ -75,7 +84,7 @@ linters:
     - misspell
     - nakedret
     - prealloc
-    - revive
+    - rowserrcheck
     - staticcheck
     - stylecheck
     - typecheck
@@ -90,7 +99,13 @@ issues:
     - path: _test\.go
       linters:
         - gomnd
+        - gosec
+        - dupl
+        - lll
+        - stylecheck
         - goconst
-    - text: "Magic number: 1"
-      linters:
-        - gomnd
+  exclude-dirs:
+    - .github/
+    - deployment/
+    - docs/
+    - images/

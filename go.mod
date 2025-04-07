@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.4
 
 require (
-	github.com/containernetworking/cni v1.1.2
+	github.com/containernetworking/cni v1.2.3
 	github.com/containernetworking/plugins v1.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/k8snetworkplumbingwg/rdma-cni v1.1.0

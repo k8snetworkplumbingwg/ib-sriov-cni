@@ -57,6 +57,7 @@ type NetlinkManager interface {
 	LinkSetVfState(netlink.Link, int, uint32) error
 	LinkSetVfPortGUID(netlink.Link, int, net.HardwareAddr) error
 	LinkSetVfNodeGUID(netlink.Link, int, net.HardwareAddr) error
+	LinkDelAltName(netlink.Link, string) error
 }
 
 // PciUtils is interface to help in SR-IOV functions

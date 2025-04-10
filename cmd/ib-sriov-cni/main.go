@@ -400,6 +400,12 @@ func main() {
 		return
 	}
 
-	skel.PluginMain(cmdAdd, cmdCheck, cmdDel,
-		cniVersion.All, "")
+	skel.PluginMainFuncs(
+		skel.CNIFuncs{
+			Add:   cmdAdd,
+			Del:   cmdDel,
+			Check: cmdCheck,
+		},
+		cniVersion.All,
+		"")
 }

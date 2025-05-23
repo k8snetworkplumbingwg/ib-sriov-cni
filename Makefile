@@ -41,6 +41,9 @@ GO_FLAGS ?=
 GO_TAGS ?=-tags no_openssl
 export GOPATH?=$(shell go env GOPATH)
 
+# License targets
+include make/license.mk
+
 .PHONY: all
 all: lint build test-coverage
 

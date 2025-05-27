@@ -3,5 +3,5 @@
 *.cover
 
 # Folders
-build/
-bin/
+/build/
+/bin/

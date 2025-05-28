@@ -15,8 +15,6 @@ name: Fork Release CI
 
 on:
   push:
-    branches:
-      - network-operator-*
     tags:
       - network-operator-*
 

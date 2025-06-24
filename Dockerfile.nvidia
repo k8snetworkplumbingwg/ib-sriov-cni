@@ -10,7 +10,7 @@ WORKDIR /usr/src/ib-sriov-cni
 RUN make clean && \
     make build
 
-FROM nvcr.io/nvidia/distroless/go:v3.1.8
+FROM nvcr.io/nvidia/doca/doca:3.0.0-base-rt-host
 COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov /usr/bin/
 # Provide the source code and license in the container
 COPY --from=builder /usr/src/ib-sriov-cni /

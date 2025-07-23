@@ -1,6 +1,8 @@
 package types
 
 import (
+	"encoding/json"
+	"fmt"
 	"net"
 
 	"github.com/containernetworking/cni/pkg/types"
@@ -10,9 +12,13 @@ import (
 	rdmatypes "github.com/k8snetworkplumbingwg/rdma-cni/pkg/types"
 )
 
-// NetConf extends types.NetConf for ib-sriov-cni
+// NetConf extends types.PluginConf for ib-sriov-cni
 type NetConf struct {
-	types.NetConf
+	types.PluginConf
+	IbSriovNetConf
+}
+
+type IbSriovNetConf struct {
 	Master              string
 	DeviceID            string `json:"deviceID"` // PCI address of a VF in valid sysfs format
 	VFID                int
@@ -29,6 +35,39 @@ type NetConf struct {
 	Args                struct {
 		CNI map[string]string `json:"cni"`
 	} `json:"args"`
+}
+
+func (n NetConf) MarshalJSON() ([]byte, error) {
+	pluginConfBytes, err := json.Marshal(&n.PluginConf)
+	if err != nil {
+		return nil, fmt.Errorf("error serializing delegate netConf: %v", err)
+	}
+
+	ibSriovNetConfBytes, err := json.Marshal(&n.IbSriovNetConf)
+	if err != nil {
+		return nil, fmt.Errorf("error serializing delegate sriovNetConf: %v", err)
+	}
+
+	netConfMap := make(map[string]interface{})
+	if err := json.Unmarshal(pluginConfBytes, &netConfMap); err != nil {
+		return nil, err
+	}
+
+	ibSriovNetConfMap := make(map[string]interface{})
+	if err := json.Unmarshal(ibSriovNetConfBytes, &ibSriovNetConfMap); err != nil {
+		return nil, err
+	}
+
+	for k, v := range netConfMap {
+		ibSriovNetConfMap[k] = v
+	}
+
+	ibSriovNetConfBytes, err = json.Marshal(ibSriovNetConfMap)
+	if err != nil {
+		return nil, err
+	}
+
+	return ibSriovNetConfBytes, nil
 }
 
 // RuntimeConf represents the plugin's runtime configurations

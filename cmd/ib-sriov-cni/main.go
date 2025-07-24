@@ -136,7 +136,7 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 }
 
 // Applies VF config and performs VF setup. if RdmaIso is configured, moves RDMA device into namespace
-func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.NetNS, args *skel.CmdArgs) error {
+func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.NetNS, args *skel.CmdArgs) (retErr error) {
 	err := sm.ApplyVFConfig(netConf)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
@@ -159,7 +159,7 @@ func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.Net
 		// restore RDMA device back to default namespace in case of error
 		// Note(adrianc): as there is no logging, we have little visibility if the restore operation failed.
 		defer func() {
-			if err != nil {
+			if retErr != nil {
 				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
 			}
 		}()
@@ -181,7 +181,7 @@ func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.Net
 }
 
 // Run the IPAM plugin
-func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (*current.Result, error) {
+func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (_ *current.Result, retErr error) {
 	if netConf.IPAM.Type == ipamDHCP {
 		return nil, fmt.Errorf("ipam type dhcp is not supported")
 	}
@@ -192,14 +192,13 @@ func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (*current.Resu
 	}
 
 	defer func() {
-		if err != nil {
+		if retErr != nil {
 			_ = ipam.ExecDel(netConf.IPAM.Type, stdinData)
 		}
 	}()
 
 	// Convert the IPAM result into the current Result type
-	var newResult *current.Result
-	newResult, err = current.NewResultFromResult(r)
+	newResult, err := current.NewResultFromResult(r)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +215,7 @@ func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (*current.Resu
 	return newResult, nil
 }
 
-func cmdAdd(args *skel.CmdArgs) error {
+func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	netConf, netns, err := getNetConfNetns(args)
 	if err != nil {
 		return err
@@ -237,7 +236,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 	defer func() {
-		if err != nil {
+		if retErr != nil {
 			nsErr := netns.Do(func(_ ns.NetNS) error {
 				_, innerErr := netlink.LinkByName(args.IfName)
 				return innerErr
@@ -265,7 +264,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 		// If runIPAMPlugin failed, than ExecDel was called. Defer if no error
 		defer func() {
-			if err != nil {
+			if retErr != nil {
 				_ = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
 			}
 		}()
@@ -295,7 +294,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	return types.PrintResult(result, netConf.CNIVersion)
 }
 
-func cmdDel(args *skel.CmdArgs) error {
+func cmdDel(args *skel.CmdArgs) (retErr error) {
 	// https://github.com/kubernetes/kubernetes/pull/35240
 	if args.Netns == "" {
 		return nil
@@ -310,11 +309,13 @@ func cmdDel(args *skel.CmdArgs) error {
 		return nil
 	}
 
-	defer func() {
-		if err == nil && cRefPath != "" {
-			_ = utils.CleanCachedNetConf(cRefPath)
-		}
-	}()
+	if cRefPath != "" {
+		defer func() {
+			if retErr == nil {
+				_ = utils.CleanCachedNetConf(cRefPath)
+			}
+		}()
+	}
 
 	sm := sriov.NewSriovManager()
 
@@ -372,7 +373,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		}
 	}
 
-	if err := sm.ResetVFConfig(netConf); err != nil {
+	if err = sm.ResetVFConfig(netConf); err != nil {
 		return fmt.Errorf("cmdDel() error reseting VF: %q", err)
 	}
 	return nil

@@ -72,10 +72,12 @@ var _ = Describe("Sriov", func() {
 
 		BeforeEach(func() {
 			netconf = &types.NetConf{
-				Master:      "ibFake0",
-				DeviceID:    "0000:af:06.0",
-				VFID:        0,
-				HostIFNames: "ibFake5",
+				IbSriovNetConf: types.IbSriovNetConf{
+					Master:      "ibFake0",
+					DeviceID:    "0000:af:06.0",
+					VFID:        0,
+					HostIFNames: "ibFake5",
+				},
 			}
 		})
 
@@ -303,11 +305,13 @@ var _ = Describe("Sriov", func() {
 			podifName = "net1"
 			contID = "dummycid"
 			netconf = &types.NetConf{
-				Master:      "ib0",
-				DeviceID:    "0000:af:06.0",
-				VFID:        0,
-				HostIFNames: "ib1",
-				ContIFNames: "net1",
+				IbSriovNetConf: types.IbSriovNetConf{
+					Master:      "ib0",
+					DeviceID:    "0000:af:06.0",
+					VFID:        0,
+					HostIFNames: "ib1",
+					ContIFNames: "net1",
+				},
 			}
 		})
 
@@ -418,11 +422,13 @@ var _ = Describe("Sriov", func() {
 			podifName = "net1"
 			contID = "dummycid"
 			netconf = &types.NetConf{
-				Master:      "ib0",
-				DeviceID:    "0000:af:06.0",
-				VFID:        0,
-				HostIFNames: "ib1",
-				ContIFNames: "net1",
+				IbSriovNetConf: types.IbSriovNetConf{
+					Master:      "ib0",
+					DeviceID:    "0000:af:06.0",
+					VFID:        0,
+					HostIFNames: "ib1",
+					ContIFNames: "net1",
+				},
 			}
 		})
 		It("Assuming existing interface", func() {
@@ -509,10 +515,12 @@ var _ = Describe("Sriov", func() {
 
 		BeforeEach(func() {
 			netconf = &types.NetConf{
-				Master:      "i4",
-				DeviceID:    "0000:af:06.0",
-				VFID:        0,
-				HostIFNames: "i1",
+				IbSriovNetConf: types.IbSriovNetConf{
+					Master:      "i4",
+					DeviceID:    "0000:af:06.0",
+					VFID:        0,
+					HostIFNames: "i1",
+				},
 			}
 		})
 

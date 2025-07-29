@@ -28,8 +28,9 @@ type IbSriovNetConf struct {
 	GUID                string `json:"-"` // Taken from either CNI_ARGS "guid" attribute or from RuntimeConfig
 	PKey                string `json:"pkey"`
 	LinkState           string `json:"link_state,omitempty"` // auto|enable|disable
-	RdmaIso             bool   `json:"rdmaIsolation,omitempty"`
+	RdmaIsolation       bool   `json:"rdmaIsolation,omitempty"`
 	IBKubernetesEnabled bool   `json:"ibKubernetesEnabled,omitempty"`
+	VfioPciMode         bool   `json:"vfioPciMode,omitempty"` // Skip SR-IOV network setup, default false
 	RdmaNetState        rdmatypes.RdmaNetState
 	RuntimeConfig       RuntimeConf `json:"runtimeConfig,omitempty"`
 	Args                struct {

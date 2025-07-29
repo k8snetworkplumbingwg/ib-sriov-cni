@@ -293,6 +293,28 @@ var _ = Describe("Sriov", func() {
 			Expect(err.Error()).To(Equal("mocked failed"))
 			Expect(netconf.HostIFGUID).To(Equal(hostGUID))
 		})
+		It("ApplyVFConfig with valid GUID and VfioPciMode VF (no network interface) - should return success after setting GUID", func() {
+			mockedNetLinkManger := &mocks.NetlinkManager{}
+			mockedPciUtils := &mocks.PciUtils{}
+
+			fakeLink := &FakeLink{netlink.LinkAttrs{}}
+			netconf.GUID = "01:23:45:67:89:ab:cd:ef"
+			netconf.VfioPciMode = true
+			netconf.HostIFNames = "" // VFIO VF has no network interface
+
+			// Only PF link is needed for VFIO VF
+			mockedNetLinkManger.On("LinkByName", netconf.Master).Return(fakeLink, nil)
+			mockedNetLinkManger.On("LinkSetVfNodeGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)
+			mockedNetLinkManger.On("LinkSetVfPortGUID", fakeLink, mock.AnythingOfType("int"), mock.Anything).Return(nil)
+
+			mockedPciUtils.On("RebindVf", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil)
+
+			sm := sriovManager{nLink: mockedNetLinkManger, utils: mockedPciUtils}
+			err := sm.ApplyVFConfig(netconf)
+			Expect(err).NotTo(HaveOccurred())
+			// For VFIO VF, HostIFGUID should be set to all-F for reset during deletion
+			Expect(netconf.HostIFGUID).To(Equal("FF:FF:FF:FF:FF:FF:FF:FF"))
+		})
 	})
 	Context("Checking SetupVF function", func() {
 		var (

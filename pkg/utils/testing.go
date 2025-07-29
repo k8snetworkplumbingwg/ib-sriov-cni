@@ -23,19 +23,22 @@ func check(e error) {
 }
 
 type tmpSysFs struct {
-	dirRoot      string
-	dirList      []string
-	fileList     map[string][]byte
-	netSymlinks  map[string]string
-	devSymlinks  map[string]string
-	vfSymlinks   map[string]string
-	originalRoot *os.File
+	dirRoot        string
+	dirList        []string
+	fileList       map[string][]byte
+	netSymlinks    map[string]string
+	devSymlinks    map[string]string
+	vfSymlinks     map[string]string
+	driverSymlinks map[string]string
+	originalRoot   *os.File
 }
 
 var ts = tmpSysFs{
 	dirList: []string{
 		"sys/class/net",
 		"sys/bus/pci/devices",
+		"sys/bus/pci/drivers/mlx5_core",
+		"sys/bus/pci/drivers/vfio-pci",
 		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:00.1/net/ib0",
 		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:06.0/net/ib1",
 		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:06.1/net/ib2",
@@ -71,6 +74,14 @@ var ts = tmpSysFs{
 
 		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:00.1/virtfn1": "sys/devices/pci0000:ae/0000:ae:00.0/0000:af:06.1",
 		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:06.1/physfn":  "sys/devices/pci0000:ae/0000:ae:00.0/0000:af:00.1",
+	},
+	driverSymlinks: map[string]string{
+		// PF device (ib0 / 0000:af:00.1) bound to mlx5_core driver
+		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:00.1/driver": "sys/bus/pci/drivers/mlx5_core",
+		// Normal VF (ib1 / 0000:af:06.0) bound to mlx5_core driver
+		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:06.0/driver": "sys/bus/pci/drivers/mlx5_core",
+		// VFIO VF (ib2 / 0000:af:06.1) bound to vfio-pci driver (for testing VFIO devices)
+		"sys/devices/pci0000:ae/0000:ae:00.0/0000:af:06.1/driver": "sys/bus/pci/drivers/" + VfioPciDriverName,
 	},
 }
 
@@ -110,6 +121,12 @@ func CreateTmpSysFs() error {
 	}
 
 	for link, target := range ts.vfSymlinks {
+		if err := createSymlinks(filepath.Join(ts.dirRoot, link), filepath.Join(ts.dirRoot, target)); err != nil {
+			return err
+		}
+	}
+
+	for link, target := range ts.driverSymlinks {
 		if err := createSymlinks(filepath.Join(ts.dirRoot, link), filepath.Join(ts.dirRoot, target)); err != nil {
 			return err
 		}

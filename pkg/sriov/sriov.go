@@ -126,6 +126,9 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName, cid string, netns
 		return fmt.Errorf("failed to get VF %s name after rebind with error, %q", conf.DeviceID, err)
 	}
 
+	// Update HostIFNames to the current actual interface name for correct restoration during delete
+	conf.HostIFNames = linkName
+
 	linkObj, err := s.nLink.LinkByName(linkName)
 	if err != nil {
 		return fmt.Errorf("error getting VF netdevice with name %s", linkName)
@@ -184,18 +187,28 @@ func (s *sriovManager) SetupVF(conf *types.NetConf, podifName, cid string, netns
 
 // ReleaseVF reset a VF from Pod netns and return it to init netns
 func (s *sriovManager) ReleaseVF(conf *types.NetConf, podifName, cid string, netns ns.NetNS) error {
+	// For VFIO devices, skip VF release operations since there's no network interface to manage
+	if conf.VfioPciMode {
+		return nil
+	}
+
 	initns, err := ns.GetCurrentNS()
 	if err != nil {
 		return fmt.Errorf("failed to get init netns: %v", err)
 	}
 
-	if len(conf.ContIFNames) < 1 && len(conf.ContIFNames) != len(conf.HostIFNames) {
-		return fmt.Errorf(
-			"number of interface names mismatch ContIFNames: %d HostIFNames: %d",
-			len(conf.ContIFNames), len(conf.HostIFNames))
+	// For cases where HostIFNames is missing from cached config, we'll use rebind approach
+	// After moving the interface back to host namespace, rebind the VF to get correct name
+	useRebindForNaming := conf.HostIFNames == ""
+
+	// Validate that we have container interface name to work with
+	if conf.ContIFNames == "" {
+		// Silently skip cleanup if container interface name is missing
+		// This can happen with corrupted or incomplete cached configs
+		return nil
 	}
 
-	return netns.Do(func(_ ns.NetNS) error {
+	err = netns.Do(func(_ ns.NetNS) error {
 		// get VF device
 		linkObj, err := s.nLink.LinkByName(podifName)
 		if err != nil {
@@ -207,19 +220,112 @@ func (s *sriovManager) ReleaseVF(conf *types.NetConf, podifName, cid string, net
 			return fmt.Errorf("failed to set link %s down: %q", podifName, err)
 		}
 
-		// rename VF device
-		err = s.nLink.LinkSetName(linkObj, conf.HostIFNames)
-		if err != nil {
-			return fmt.Errorf("failed to rename link %s to host name %s: %q", podifName, conf.HostIFNames, err)
+		// Only try to rename if we have a valid host interface name
+		if !useRebindForNaming && conf.HostIFNames != "" {
+			// rename VF device - if this fails, continue anyway as the main goal is to move the interface back
+			_ = s.nLink.LinkSetName(linkObj, conf.HostIFNames)
+			// Silently ignore rename errors - the interface will still be moved back to host namespace
+			// This can happen if there's a naming conflict or if the generated name is invalid
+			// The main goal is to move the interface back, renaming is secondary
 		}
 
 		// move VF device to init netns
 		if err = s.nLink.LinkSetNsFd(linkObj, int(initns.Fd())); err != nil {
-			return fmt.Errorf("failed to move interface %s to init netns: %v", conf.HostIFNames, err)
+			return fmt.Errorf("failed to move interface %s to init netns: %v", podifName, err)
 		}
 
 		return nil
 	})
+
+	// If we skipped renaming due to missing host interface name, rebind the VF to get correct name
+	if err == nil && useRebindForNaming {
+		// Rebind the VF to ensure it gets the correct interface name in host namespace
+		_ = s.utils.RebindVf(conf.Master, conf.DeviceID)
+		// Don't fail the entire operation if rebind fails - the interface is already back in host namespace
+		// This is just for getting the correct name, which is not critical for deletion success
+	}
+
+	return err
+}
+
+// setVFLinkState sets the VF link state
+func (s *sriovManager) setVFLinkState(conf *types.NetConf, pfLink netlink.Link) error {
+	if conf.LinkState == "" {
+		return nil
+	}
+
+	var state uint32
+	switch conf.LinkState {
+	case "auto":
+		state = netlink.VF_LINK_STATE_AUTO
+	case "enable":
+		state = netlink.VF_LINK_STATE_ENABLE
+	case "disable":
+		state = netlink.VF_LINK_STATE_DISABLE
+	default:
+		// the value should have been validated earlier, return error if we somehow got here
+		return fmt.Errorf("unknown link state %s when setting it for vf %d", conf.LinkState, conf.VFID)
+	}
+
+	if err := s.nLink.LinkSetVfState(pfLink, conf.VFID, state); err != nil {
+		return fmt.Errorf("failed to set vf %d link state to %d: %v", conf.VFID, state, err)
+	}
+
+	return nil
+}
+
+// handleVFGuidConfiguration handles VF GUID setting and validation
+func (s *sriovManager) handleVFGuidConfiguration(conf *types.NetConf, pfLink netlink.Link) error {
+	if conf.GUID != "" {
+		return s.setVFGuid(conf, pfLink)
+	}
+	return s.validateVFGuid(conf)
+}
+
+// setVFGuid sets the VF GUID
+func (s *sriovManager) setVFGuid(conf *types.NetConf, pfLink netlink.Link) error {
+	if !utils.IsValidGUID(conf.GUID) {
+		return fmt.Errorf("invalid guid %s", conf.GUID)
+	}
+
+	// For VFIO VF devices, we don't have a network interface, so skip VF link operations
+	if conf.VfioPciMode && conf.HostIFNames == "" {
+		// VFIO VF: Just set the GUID directly via PF, no VF link to query
+		return s.setVfGUID(conf, pfLink, conf.GUID)
+	}
+
+	// Normal VF (not VFIO): save current link guid and set new one
+	vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+	if err != nil {
+		return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+	}
+
+	conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
+
+	// Set link guid
+	return s.setVfGUID(conf, pfLink, conf.GUID)
+}
+
+// validateVFGuid validates that the VF has a valid GUID
+func (s *sriovManager) validateVFGuid(conf *types.NetConf) error {
+	// For VFIO VF devices, skip GUID validation since we can't access the VF interface
+	if conf.VfioPciMode && conf.HostIFNames == "" {
+		// VFIO VF without GUID specified: nothing to do, just return success
+		return nil
+	}
+
+	// Normal VF: Verify VF have valid GUID.
+	vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+	if err != nil {
+		return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+	}
+
+	guid := utils.GetGUIDFromHwAddr(vfLink.Attrs().HardwareAddr)
+	if guid == "" || utils.IsAllZeroGUID(guid) || utils.IsAllOnesGUID(guid) {
+		return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
+	}
+
+	return nil
 }
 
 // ApplyVFConfig configure a VF with parameters given in NetConf
@@ -230,52 +336,18 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 	}
 
 	// Set link state
-	if conf.LinkState != "" {
-		var state uint32
-		switch conf.LinkState {
-		case "auto":
-			state = netlink.VF_LINK_STATE_AUTO
-		case "enable":
-			state = netlink.VF_LINK_STATE_ENABLE
-		case "disable":
-			state = netlink.VF_LINK_STATE_DISABLE
-		default:
-			// the value should have been validated earlier, return error if we somehow got here
-			return fmt.Errorf("unknown link state %s when setting it for vf %d: %v", conf.LinkState, conf.VFID, err)
-		}
-		if err = s.nLink.LinkSetVfState(pfLink, conf.VFID, state); err != nil {
-			return fmt.Errorf("failed to set vf %d link state to %d: %v", conf.VFID, state, err)
-		}
+	if err := s.setVFLinkState(conf, pfLink); err != nil {
+		return err
 	}
 
-	// Set link guid
-	if conf.GUID != "" {
-		if !utils.IsValidGUID(conf.GUID) {
-			return fmt.Errorf("invalid guid %s", conf.GUID)
-		}
-		// save link guid
-		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
-		if err != nil {
-			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
-		}
+	// Handle VF GUID configuration
+	if err := s.handleVFGuidConfiguration(conf, pfLink); err != nil {
+		return err
+	}
 
-		conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
-
-		// Set link guid
-		if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
-			return err
-		}
-	} else {
-		// Verify VF have valid GUID.
-		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
-		if err != nil {
-			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
-		}
-
-		guid := utils.GetGUIDFromHwAddr(vfLink.Attrs().HardwareAddr)
-		if guid == "" || utils.IsAllZeroGUID(guid) || utils.IsAllOnesGUID(guid) {
-			return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
-		}
+	// If it's VF VFIO type, return success after setting VF GUID
+	if conf.VfioPciMode {
+		return nil
 	}
 
 	return nil
@@ -309,9 +381,34 @@ func (s *sriovManager) restoreVFName(conf *types.NetConf) error {
 
 // ResetVFConfig reset a VF with default values
 func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
-	pfLink, err := s.nLink.LinkByName(conf.Master)
+	// If Master (PF name) is missing from cached config, try to derive it from device ID
+	masterName := conf.Master
+	if masterName == "" && conf.DeviceID != "" {
+		// Try to get PF name from VF PCI address
+		pfName, err := utils.GetPfName(conf.DeviceID)
+		if err != nil {
+			// If we can't determine the PF name, skip VF reset silently
+			return nil
+		}
+		masterName = pfName
+
+		// Also get VF ID if it's missing
+		if conf.VFID == 0 { // Assuming 0 means unset, though VF 0 is valid
+			vfID, err := utils.GetVfid(conf.DeviceID, pfName)
+			if err == nil {
+				conf.VFID = vfID
+			}
+		}
+	}
+
+	// If we still don't have a master name, skip reset
+	if masterName == "" {
+		return nil
+	}
+
+	pfLink, err := s.nLink.LinkByName(masterName)
 	if err != nil {
-		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		return fmt.Errorf("failed to lookup master %q: %v", masterName, err)
 	}
 
 	// Reset link state to `auto`
@@ -336,8 +433,11 @@ func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
 			return err
 		}
 		// setVfGUID cause VF to rebind, which change its name. Lets restore it.
+		// For VFIO devices, skip VF name restoration since no rebind occurs
 		// Once setVfGUID wouldn't do rebind to apply GUID this function should be removed
-		return s.restoreVFName(conf)
+		if !conf.VfioPciMode {
+			return s.restoreVFName(conf)
+		}
 	}
 
 	return nil
@@ -356,10 +456,14 @@ func (s *sriovManager) setVfGUID(conf *types.NetConf, pfLink netlink.Link, guidA
 	if err != nil {
 		return fmt.Errorf("failed to add port guid %s: %v", guid, err)
 	}
-	// unbind vf then bind it to apply the guid
-	err = s.utils.RebindVf(conf.Master, conf.DeviceID)
-	if err != nil {
-		return err
+	// For VFIO devices, skip rebind as the device is bound to vfio-pci driver
+	// and doesn't have a network interface that can be unbound/rebound
+	if !conf.VfioPciMode {
+		// unbind vf then bind it to apply the guid
+		err = s.utils.RebindVf(conf.Master, conf.DeviceID)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

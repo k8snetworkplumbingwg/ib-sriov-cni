@@ -60,6 +60,27 @@ func LoadDeviceInfo(netConf *types.NetConf) error {
 	return nil
 }
 
+// LoadDeviceInfoVfioVF loads device information for VFIO VF devices (no network interface)
+func LoadDeviceInfoVfioVF(netConf *types.NetConf) error {
+	// DeviceID takes precedence; if we are given a VF pciaddr then work from there
+	if netConf.DeviceID != "" {
+		// Get rest of the VF information
+		pfName, vfID, err := getVfInfo(netConf.DeviceID)
+		if err != nil {
+			return fmt.Errorf("load config: failed to get VF information: %q", err)
+		}
+		netConf.VFID = vfID
+		netConf.Master = pfName
+
+		// For VFIO VF, we don't have network interface, so set HostIFNames to empty
+		netConf.HostIFNames = ""
+	} else {
+		return fmt.Errorf("load config: vf pci addr is required")
+	}
+
+	return nil
+}
+
 func getVfInfo(vfPci string) (string, int, error) {
 	var vfID int
 

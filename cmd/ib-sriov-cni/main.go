@@ -95,6 +95,24 @@ func unlockCNIExecution(lock *flock.Flock) {
 	_ = lock.Unlock()
 }
 
+func handleVfioPciDetection(netConf *localtypes.NetConf) error {
+	if netConf.DeviceID == "" {
+		return nil
+	}
+
+	// If vfioPciMode is explicitly set to true, use it; otherwise auto-detect
+	if !netConf.VfioPciMode {
+		isVfioPci, err := utils.IsVfioPciDevice(netConf.DeviceID)
+		if err != nil {
+			return fmt.Errorf("failed to check vfio-pci driver binding for device %s: %v", netConf.DeviceID, err)
+		}
+		if isVfioPci {
+			netConf.VfioPciMode = true
+		}
+	}
+	return nil
+}
+
 // Get network config, updated with GUID, device info and network namespace.
 func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) {
 	netConf, err := config.LoadConf(args.StdinData)
@@ -114,6 +132,21 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 	if netConf.IBKubernetesEnabled && netConf.GUID == "" {
 		return nil, nil, fmt.Errorf(
 			"infiniband SRIOV-CNI failed, Unexpected error. GUID must be provided by ib-kubernetes")
+	}
+
+	// Handle vfio-pci detection
+	if err := handleVfioPciDetection(netConf); err != nil {
+		return nil, nil, err
+	}
+
+	// If vfioPciMode is true (either set manually or auto-detected), skip SR-IOV setup
+	if netConf.VfioPciMode {
+		// Skip normal SR-IOV setup for vfio-pci devices, just get netns and return
+		netns, err := ns.GetNS(args.Netns)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to open netns %q: %v", netns, err)
+		}
+		return netConf, netns, nil
 	}
 
 	if netConf.RdmaIso {
@@ -215,12 +248,97 @@ func runIPAMPlugin(stdinData []byte, netConf *localtypes.NetConf) (_ *current.Re
 	return newResult, nil
 }
 
+// handleVfioPciMode handles VFIO PCI devices with VF GUID setting if needed
+func handleVfioPciMode(args *skel.CmdArgs, netConf *localtypes.NetConf, netns ns.NetNS) error {
+	// Check if the device is a VF (Virtual Function) or PF (Physical Function)
+	isVF, err := utils.IsVirtualFunction(netConf.DeviceID)
+	if err != nil {
+		return fmt.Errorf("failed to determine if device %s is VF or PF: %v", netConf.DeviceID, err)
+	}
+
+	// Only handle GUID setting for VF devices, keep previous code path for PF devices
+	if isVF && netConf.GUID != "" {
+		// Load device info needed for GUID setting (VFIO VF version - no network interface)
+		err = config.LoadDeviceInfoVfioVF(netConf)
+		if err != nil {
+			return fmt.Errorf("failed to get device specific information for vfio-pci VF device: %v", err)
+		}
+
+		sm := sriov.NewSriovManager()
+		if err := sm.ApplyVFConfig(netConf); err != nil {
+			return fmt.Errorf("failed to configure VF GUID for vfio-pci device: %v", err)
+		}
+	}
+
+	result := &current.Result{}
+	result.Interfaces = []*current.Interface{{
+		Name:    args.IfName,
+		Sandbox: netns.Path(),
+	}}
+
+	// Cache NetConf for CmdDel (minimal config for vfio-pci mode)
+	if err = utils.SaveNetConf(args.ContainerID, config.DefaultCNIDir, args.IfName, netConf); err != nil {
+		return fmt.Errorf("error saving NetConf %q", err)
+	}
+
+	return types.PrintResult(result, netConf.CNIVersion)
+}
+
+// setupIPAMAndResult handles IPAM configuration and creates the result
+func setupIPAMAndResult(args *skel.CmdArgs, netConf *localtypes.NetConf, netns ns.NetNS) (*current.Result, func(error), error) {
+	result := &current.Result{}
+	result.Interfaces = []*current.Interface{{
+		Name:    args.IfName,
+		Sandbox: netns.Path(),
+	}}
+
+	// Default cleanup function (no-op)
+	cleanup := func(error) {}
+
+	if netConf.IPAM.Type != "" {
+		newResult, err := runIPAMPlugin(args.StdinData, netConf)
+		if err != nil {
+			return nil, cleanup, err
+		}
+
+		// Return cleanup function for IPAM
+		cleanup = func(retErr error) {
+			if retErr != nil {
+				_ = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
+			}
+		}
+
+		newResult.Interfaces = result.Interfaces
+
+		for _, ipc := range newResult.IPs {
+			// only a single interface is handled by ib-sriov-cni, point ip IPConfig.Interface to it.
+			ipc.Interface = current.Int(0)
+		}
+
+		err = netns.Do(func(_ ns.NetNS) error {
+			return ipam.ConfigureIface(args.IfName, newResult)
+		})
+		if err != nil {
+			return nil, cleanup, err
+		}
+
+		result = newResult
+	}
+
+	return result, cleanup, nil
+}
+
 func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	netConf, netns, err := getNetConfNetns(args)
 	if err != nil {
 		return err
 	}
 	defer netns.Close()
+
+	// If device is bound to vfio-pci, handle VF GUID setting if needed, then skip SR-IOV configuration
+	if netConf.VfioPciMode {
+		return handleVfioPciMode(args, netConf, netns)
+	}
 
 	sm := sriov.NewSriovManager()
 
@@ -237,12 +355,15 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	}
 	defer func() {
 		if retErr != nil {
-			nsErr := netns.Do(func(_ ns.NetNS) error {
-				_, innerErr := netlink.LinkByName(args.IfName)
-				return innerErr
-			})
-			if nsErr == nil {
-				_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+			// Skip cleanup for VFIO devices as they don't have network interfaces to manage
+			if !netConf.VfioPciMode {
+				nsErr := netns.Do(func(_ ns.NetNS) error {
+					_, innerErr := netlink.LinkByName(args.IfName)
+					return innerErr
+				})
+				if nsErr == nil {
+					_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+				}
 			}
 			if netConf.RdmaIso {
 				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
@@ -250,41 +371,13 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 		}
 	}()
 
-	result := &current.Result{}
-	result.Interfaces = []*current.Interface{{
-		Name:    args.IfName,
-		Sandbox: netns.Path(),
-	}}
-
-	if netConf.IPAM.Type != "" {
-		var newResult *current.Result
-		newResult, err = runIPAMPlugin(args.StdinData, netConf)
-		if err != nil {
-			return err
-		}
-		// If runIPAMPlugin failed, than ExecDel was called. Defer if no error
-		defer func() {
-			if retErr != nil {
-				_ = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
-			}
-		}()
-
-		newResult.Interfaces = result.Interfaces
-
-		for _, ipc := range newResult.IPs {
-			// only a single interface is handled by ib-sriov-cni, point ip IPConfig.Interface to it.
-			ipc.Interface = current.Int(0)
-		}
-
-		err = netns.Do(func(_ ns.NetNS) error {
-			return ipam.ConfigureIface(args.IfName, newResult)
-		})
-		if err != nil {
-			return err
-		}
-
-		result = newResult
+	result, ipamCleanup, err := setupIPAMAndResult(args, netConf, netns)
+	if err != nil {
+		return err
 	}
+	defer func() {
+		ipamCleanup(retErr)
+	}()
 
 	// Cache NetConf for CmdDel
 	if err = utils.SaveNetConf(args.ContainerID, config.DefaultCNIDir, args.IfName, netConf); err != nil {
@@ -292,6 +385,16 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	}
 
 	return types.PrintResult(result, netConf.CNIVersion)
+}
+
+func handleIPAMCleanup(netConf *localtypes.NetConf, stdinData []byte) error {
+	if netConf.IPAM.Type == "" {
+		return nil
+	}
+	if netConf.IPAM.Type == ipamDHCP {
+		return fmt.Errorf("ipam type dhcp is not supported")
+	}
+	return ipam.ExecDel(netConf.IPAM.Type, stdinData)
 }
 
 func cmdDel(args *skel.CmdArgs) (retErr error) {
@@ -317,16 +420,16 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 		}()
 	}
 
+	// If device was in vfio-pci mode, skip all SR-IOV and IPAM cleanup
+	if netConf.VfioPciMode {
+		return nil
+	}
+
 	sm := sriov.NewSriovManager()
 
-	if netConf.IPAM.Type != "" {
-		if netConf.IPAM.Type == ipamDHCP {
-			return fmt.Errorf("ipam type dhcp is not supported")
-		}
-		err = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
-		if err != nil {
-			return err
-		}
+	err = handleIPAMCleanup(netConf, args.StdinData)
+	if err != nil {
+		return err
 	}
 
 	netns, err := ns.GetNS(args.Netns)

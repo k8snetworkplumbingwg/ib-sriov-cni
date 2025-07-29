@@ -95,6 +95,24 @@ func unlockCNIExecution(lock *flock.Flock) {
 	_ = lock.Unlock()
 }
 
+func handleVfioPciDetection(netConf *localtypes.NetConf) error {
+	if netConf.DeviceID == "" {
+		return nil
+	}
+
+	// If vfioPciMode is explicitly set to true, use it; otherwise auto-detect
+	if !netConf.VfioPciMode {
+		isVfioPci, err := utils.IsVfioPciDevice(netConf.DeviceID)
+		if err != nil {
+			return fmt.Errorf("failed to check vfio-pci driver binding for device %s: %v", netConf.DeviceID, err)
+		}
+		if isVfioPci {
+			netConf.VfioPciMode = true
+		}
+	}
+	return nil
+}
+
 // Get network config, updated with GUID, device info and network namespace.
 func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) {
 	netConf, err := config.LoadConf(args.StdinData)
@@ -123,6 +141,11 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 		}
 	}
 
+	// Handle vfio-pci detection
+	if err := handleVfioPciDetection(netConf); err != nil {
+		return nil, nil, err
+	}
+
 	err = config.LoadDeviceInfo(netConf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get device specific information. %v", err)
@@ -140,6 +163,11 @@ func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.Net
 	err := sm.ApplyVFConfig(netConf)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
+	}
+
+	// VFIO devices don't have network interfaces, skip SetupVF
+	if netConf.VfioPciMode {
+		return nil
 	}
 
 	// Note(adrianc): We do this here as ApplyVFCOnfig is rebinding the VF, causing the RDMA device to be recreated.
@@ -256,7 +284,8 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 		Sandbox: netns.Path(),
 	}}
 
-	if netConf.IPAM.Type != "" {
+	// VFIO devices don't have network interfaces, skip IPAM configuration
+	if netConf.IPAM.Type != "" && !netConf.VfioPciMode {
 		var newResult *current.Result
 		newResult, err = runIPAMPlugin(args.StdinData, netConf)
 		if err != nil {
@@ -294,6 +323,17 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	return types.PrintResult(result, netConf.CNIVersion)
 }
 
+func handleIPAMCleanup(netConf *localtypes.NetConf, stdinData []byte) error {
+	// VFIO devices don't use IPAM
+	if netConf.VfioPciMode {
+		return nil
+	}
+	if netConf.IPAM.Type == ipamDHCP {
+		return fmt.Errorf("ipam type dhcp is not supported")
+	}
+	return ipam.ExecDel(netConf.IPAM.Type, stdinData)
+}
+
 func cmdDel(args *skel.CmdArgs) (retErr error) {
 	// https://github.com/kubernetes/kubernetes/pull/35240
 	if args.Netns == "" {
@@ -320,10 +360,7 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 	sm := sriov.NewSriovManager()
 
 	if netConf.IPAM.Type != "" {
-		if netConf.IPAM.Type == ipamDHCP {
-			return fmt.Errorf("ipam type dhcp is not supported")
-		}
-		err = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
+		err = handleIPAMCleanup(netConf, args.StdinData)
 		if err != nil {
 			return err
 		}
@@ -352,9 +389,12 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 	}
 	defer unlockCNIExecution(lock)
 
-	err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
-	if err != nil {
-		return err
+	// VFIO devices don't have network interfaces to release
+	if !netConf.VfioPciMode {
+		err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Move RDMA device to default namespace

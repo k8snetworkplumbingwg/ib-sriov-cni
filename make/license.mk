@@ -58,7 +58,7 @@ third-party-licenses: go-licenses
 	@$(GO_LICENSES) save ./... --save_path=third_party_licenses --ignore=github.com/ajeddeloh/go-json || true
 	@echo "Generating THIRD_PARTY_NOTICES..."
 	@if [ -d "third_party_licenses" ]; then \
-		find third_party_licenses -type f -iname "LICENSE*" | sort | while read -r license; do \
+		find third_party_licenses -type f -iname "LICENSE*" | sort --ignore-case | while read -r license; do \
 			echo "---"; \
 			echo "## $$(basename $$(dirname "$$license"))"; \
 			echo ""; \

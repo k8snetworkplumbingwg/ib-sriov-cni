@@ -10,20 +10,20 @@ jobs:
         with:
           go-version: 1.24.x
       - name: checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: run make lint
         run: make lint
   shellcheck:
     runs-on: ubuntu-24.04
     steps:
       - name: checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: run make shellcheck
         run: make shellcheck
   hadolint:
     runs-on: ubuntu-24.04
     steps:
       - name: checkout PR
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: run make hadolint
         run: make hadolint

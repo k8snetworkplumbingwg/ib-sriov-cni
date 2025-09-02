@@ -22,8 +22,8 @@ github.com/google/pprof v0.0.0-20250423184734-337e5dd93bb4 h1:gD0vax+4I+mAj+jECh
 github.com/google/pprof v0.0.0-20250423184734-337e5dd93bb4/go.mod h1:5hDyRhoBCxViHszMt12TnOpEI4VVi+U8Gm9iphldiMA=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/k8snetworkplumbingwg/rdma-cni v1.3.0 h1:ddCd/KoFiLM0zwqbPV/geTC1I8QiXFTYbx14+4xYnLY=
-github.com/k8snetworkplumbingwg/rdma-cni v1.3.0/go.mod h1:k22OVuLz3FTrViRMZ00rySZYvchbkkmgGdea6ZHy5HI=
+github.com/k8snetworkplumbingwg/rdma-cni v1.4.0 h1:S4Dt8Oi8ndh6jRMfkhcIb6HXZUPgiqQJ0gmkaTGAZ2Q=
+github.com/k8snetworkplumbingwg/rdma-cni v1.4.0/go.mod h1:3LdblK1KkPEsXVSG4lD6iWTR4FhoJpjlW3u/gsz5Zuo=
 github.com/k8snetworkplumbingwg/sriovnet v1.2.0 h1:6ELfAxCB1dvosGUy3DVRmfH+HWTzmPD3W67HKQvMR1M=
 github.com/k8snetworkplumbingwg/sriovnet v1.2.0/go.mod h1:jyWzGe6ZtYiPq6ih6aXCOy6mZ49Y9mNyBOLBBXnli+k=
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=

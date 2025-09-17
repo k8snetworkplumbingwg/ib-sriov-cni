@@ -30,6 +30,7 @@ type IbSriovNetConf struct {
 	LinkState           string `json:"link_state,omitempty"` // auto|enable|disable
 	RdmaIso             bool   `json:"rdmaIsolation,omitempty"`
 	IBKubernetesEnabled bool   `json:"ibKubernetesEnabled,omitempty"`
+	VfioPciMode         bool   `json:"vfioPciMode,omitempty"` // Skip SR-IOV network setup, default false
 	RdmaNetState        rdmatypes.RdmaNetState
 	RuntimeConfig       RuntimeConf `json:"runtimeConfig,omitempty"`
 	Args                struct {

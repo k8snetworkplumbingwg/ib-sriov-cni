@@ -244,3 +244,38 @@ func IsAllZeroGUID(guid string) bool {
 func IsAllOnesGUID(guid string) bool {
 	return guid == "ff:ff:ff:ff:ff:ff:ff:ff" || guid == "FF:FF:FF:FF:FF:FF:FF:FF"
 }
+
+// IsVfioPciDevice checks if a PCI device is bound to vfio-pci driver
+func IsVfioPciDevice(pciAddr string) (bool, error) {
+	driverPath := filepath.Join(SysBusPci, pciAddr, "driver")
+
+	// Check if driver symlink exists
+	linkTarget, err := os.Readlink(driverPath)
+	if err != nil {
+		// If readlink fails, the device might not be bound to any driver
+		return false, nil
+	}
+
+	// Check if the driver is vfio-pci
+	driverName := filepath.Base(linkTarget)
+	return driverName == "vfio-pci", nil
+}
+
+// IsVirtualFunction checks if a PCI device is a VF by checking for physfn symlink
+func IsVirtualFunction(pciAddr string) (bool, error) {
+	physfnPath := filepath.Join(SysBusPci, pciAddr, "physfn")
+
+	// Check if physfn symlink exists
+	_, err := os.Lstat(physfnPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// physfn doesn't exist, so this is not a VF (likely a PF)
+			return false, nil
+		}
+		// Other error occurred
+		return false, err
+	}
+
+	// physfn exists, so this is a VF
+	return true, nil
+}

@@ -4,7 +4,8 @@ PACKAGE=ib-sriov-cni
 BINDIR=$(CURDIR)/bin
 BUILDDIR=$(CURDIR)/build
 BASE=$(CURDIR)
-GOFILES=$(shell find . -name *.go | grep -vE "(_test.go)")
+CNI_GOFILES=$(shell find . -name *.go -path "./cmd/$(PACKAGE)/*" -o -path "./pkg/*" | grep -vE "(_test.go)")
+THIN_ENTRYPOINT_GOFILES=$(shell find . -name *.go -path "./cmd/thin_entrypoint/*" | grep -vE "(_test.go)")
 PKGS=$(or $(PKG),$(shell $(GO) list ./...))
 TESTPKGS = $(shell $(GO) list -f '{{ if or .TestGoFiles .XTestGoFiles }}{{ .ImportPath }}{{ end }}' $(PKGS))
 
@@ -50,11 +51,18 @@ $(BINDIR):
 $(BUILDDIR): ; $(info Creating build directory...)
 	@mkdir -p $@
 
-build: $(BUILDDIR)/$(BINARY_NAME) ; $(info Building $(BINARY_NAME)...) ## Build executable file
+define go-build
+	@cd $(1) && $(GO_BUILD_OPTS) $(GO) build -o $(2) $(GO_TAGS) -ldflags $(LDFLAGS) -v
+endef
+
+build: $(BUILDDIR)/$(BINARY_NAME) $(BUILDDIR)/thin_entrypoint ; $(info Building $(BINARY_NAME) and thin_entrypoint...) ## Build executable files
 	$(info Done!)
 
-$(BUILDDIR)/$(BINARY_NAME): $(GOFILES) | $(BUILDDIR)
-	@cd $(BASE)/cmd/$(PACKAGE) && $(GO_BUILD_OPTS) $(GO) build -o $(BUILDDIR)/$(BINARY_NAME) $(GO_TAGS) -ldflags $(LDFLAGS) -v
+$(BUILDDIR)/$(BINARY_NAME): $(CNI_GOFILES) | $(BUILDDIR) ; $(info  building $(BINARY_NAME)...)
+	$(call go-build,$(BASE)/cmd/$(PACKAGE),$(BUILDDIR)/$(BINARY_NAME))
+
+$(BUILDDIR)/thin_entrypoint: $(THIN_ENTRYPOINT_GOFILES) | $(BUILDDIR) ; $(info  building thin_entrypoint...)
+	$(call go-build,$(BASE)/cmd/thin_entrypoint,$(BUILDDIR)/thin_entrypoint)
 
 # Tools
 
@@ -113,7 +121,7 @@ hadolint: $(HADOLINT_TOOL); $(info  running hadolint...) ## Run hadolint
 
 .PHONY: shellcheck
 shellcheck: $(SHELLCHECK_TOOL); $(info  running shellcheck...) ## Run shellcheck
-	$Q $(SHELLCHECK_TOOL) images/entrypoint.sh
+	$Q $(SHELLCHECK_TOOL) images/*.sh
 
 # Container image
 .PHONY: image

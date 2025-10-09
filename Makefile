@@ -50,11 +50,14 @@ $(BINDIR):
 $(BUILDDIR): ; $(info Creating build directory...)
 	@mkdir -p $@
 
-build: $(BUILDDIR)/$(BINARY_NAME) ; $(info Building $(BINARY_NAME)...) ## Build executable file
+build: $(BUILDDIR)/$(BINARY_NAME) $(BUILDDIR)/thin_entrypoint ; $(info Building $(BINARY_NAME) and thin_entrypoint...) ## Build executable files
 	$(info Done!)
 
 $(BUILDDIR)/$(BINARY_NAME): $(GOFILES) | $(BUILDDIR)
 	@cd $(BASE)/cmd/$(PACKAGE) && $(GO_BUILD_OPTS) $(GO) build -o $(BUILDDIR)/$(BINARY_NAME) $(GO_TAGS) -ldflags $(LDFLAGS) -v
+
+$(BUILDDIR)/thin_entrypoint: $(GOFILES) | $(BUILDDIR)
+	@cd $(BASE)/cmd/thin_entrypoint && $(GO_BUILD_OPTS) $(GO) build -o $(BUILDDIR)/thin_entrypoint $(GO_TAGS) -ldflags $(LDFLAGS) -v
 
 # Tools
 
@@ -113,7 +116,7 @@ hadolint: $(HADOLINT_TOOL); $(info  running hadolint...) ## Run hadolint
 
 .PHONY: shellcheck
 shellcheck: $(SHELLCHECK_TOOL); $(info  running shellcheck...) ## Run shellcheck
-	$Q $(SHELLCHECK_TOOL) images/entrypoint.sh
+	@echo "No shell scripts to check (using Go thin_entrypoint now)"
 
 # Container image
 .PHONY: image
@@ -125,11 +128,7 @@ image: ; $(info Building Docker image...)  ## Build conatiner image
 deps-update: ; $(info  updating dependencies...) ## update dependencies by running go mod tidy
 	go mod tidy
 
-.PHONY: test-image
-test-image: image ## Test image
-	$Q $(BASE)/images/image_test.sh $(IMAGE_BUILDER) $(TAG)
-
-tests: lint hadolint shellcheck test test-image ## Run lint, hadolint, shellcheck, unit test and image test
+tests: lint hadolint shellcheck test ## Run lint, hadolint, shellcheck and unit tests
 
 # Misc
 

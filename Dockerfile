@@ -1,21 +1,28 @@
-FROM golang:1.24-alpine as builder
+FROM golang:1.24 AS builder
 
 COPY . /usr/src/ib-sriov-cni
 
-ENV HTTP_PROXY $http_proxy
-ENV HTTPS_PROXY $https_proxy
+# Declare build arguments for proxy settings
+ARG http_proxy
+ARG https_proxy
 
-RUN apk add --no-cache --virtual build-dependencies build-base=~0.5
+# Use modern ENV syntax and only set if proxy args are provided
+ENV HTTP_PROXY=${http_proxy}
+ENV HTTPS_PROXY=${https_proxy}
+
 WORKDIR /usr/src/ib-sriov-cni
 RUN make clean && \
     make build
 
-FROM alpine:3.22.1
-COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov /usr/bin/
+FROM gcr.io/distroless/base-debian12:latest
+ARG BUILD_VARIANT=standard
+
+COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov /usr/src/ib-sriov-cni/bin/
+COPY --from=builder /usr/src/ib-sriov-cni/LICENSE /usr/src/ib-sriov-cni/LICENSE
 WORKDIR /
+
+COPY --from=builder /usr/src/ib-sriov-cni/build/thin_entrypoint /
 
 LABEL io.k8s.display-name="InfiniBand SR-IOV CNI"
 
-COPY ./images/entrypoint.sh /
-
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/thin_entrypoint"]

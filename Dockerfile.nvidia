@@ -13,7 +13,7 @@ WORKDIR /usr/src/ib-sriov-cni
 RUN make clean && \
     make build
 
-FROM nvcr.io/nvidia/distroless/go:v3.1.13-dev
+FROM nvcr.io/nvidia/distroless/go:v3.2.0-dev
 
 USER 0:0
 SHELL ["/busybox/sh", "-c"]

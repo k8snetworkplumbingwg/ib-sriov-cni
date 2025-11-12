@@ -23,6 +23,8 @@ const (
 	IPoIBAddrLengthBytes       = 20
 	OwnerReadWriteExecuteAttrs = 0700
 	OwnerReadWriteAttrs        = 0600
+	VfioPciDriverName          = "vfio-pci"
+	DefaultGUID                = "FF:FF:FF:FF:FF:FF:FF:FF"
 )
 
 // GetSriovNumVfs takes in a PF name(ifName) as string and returns number of VF configured as int
@@ -243,4 +245,20 @@ func IsAllZeroGUID(guid string) bool {
 // IsAllOnesGUID check if the guid is all ones
 func IsAllOnesGUID(guid string) bool {
 	return guid == "ff:ff:ff:ff:ff:ff:ff:ff" || guid == "FF:FF:FF:FF:FF:FF:FF:FF"
+}
+
+// IsVfioPciDevice checks if a PCI device is bound to vfio-pci driver
+func IsVfioPciDevice(pciAddr string) (bool, error) {
+	driverPath := filepath.Join(SysBusPci, pciAddr, "driver")
+
+	// Check if driver symlink exists
+	linkTarget, err := os.Readlink(driverPath)
+	if err != nil {
+		// If readlink fails, the device might not be bound to any driver
+		return false, nil
+	}
+
+	// Check if the driver is vfio-pci
+	driverName := filepath.Base(linkTarget)
+	return driverName == VfioPciDriverName, nil
 }

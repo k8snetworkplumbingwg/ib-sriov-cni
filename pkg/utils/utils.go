@@ -262,3 +262,22 @@ func IsVfioPciDevice(pciAddr string) (bool, error) {
 	driverName := filepath.Base(linkTarget)
 	return driverName == VfioPciDriverName, nil
 }
+
+// IsVirtualFunction checks if a PCI device is a VF by checking for physfn symlink
+func IsVirtualFunction(pciAddr string) (bool, error) {
+	physfnPath := filepath.Join(SysBusPci, pciAddr, "physfn")
+
+	// Check if physfn symlink exists
+	_, err := os.Lstat(physfnPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// physfn doesn't exist, so this is not a VF (likely a PF)
+			return false, nil
+		}
+		// Other error occurred
+		return false, err
+	}
+
+	// physfn exists, so this is a VF
+	return true, nil
+}

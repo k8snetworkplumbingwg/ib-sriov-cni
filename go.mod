@@ -6,7 +6,7 @@ require (
 	github.com/containernetworking/cni v1.3.0
 	github.com/containernetworking/plugins v1.8.0
 	github.com/gofrs/flock v0.13.0
-	github.com/k8snetworkplumbingwg/rdma-cni v1.4.0
+	github.com/k8snetworkplumbingwg/rdma-cni v1.5.0
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2

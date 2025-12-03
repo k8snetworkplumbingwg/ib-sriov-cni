@@ -1,9 +1,16 @@
-FROM golang:1.24-alpine as builder
+FROM golang:1.24-alpine AS builder
 
 COPY . /usr/src/ib-sriov-cni
 
-ENV HTTP_PROXY $http_proxy
-ENV HTTPS_PROXY $https_proxy
+ARG TARGETOS
+ARG TARGETARCH
+ARG http_proxy
+ARG https_proxy
+
+ENV HTTP_PROXY=$http_proxy \
+    HTTPS_PROXY=$https_proxy \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH
 
 RUN apk add --no-cache --virtual build-dependencies build-base=~0.5
 WORKDIR /usr/src/ib-sriov-cni

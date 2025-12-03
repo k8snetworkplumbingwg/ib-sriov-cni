@@ -2,15 +2,17 @@ name: "push images on release"
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository }}
+  PLATFORMS: linux/amd64,linux/arm64,linux/ppc64le,linux/s390x
 
 on:
   push:
     tags:
       - v*
+
 jobs:
-  build-and-push-amd64-ib-sriov-cni:
+  build-and-push-ib-sriov-cni:
     runs-on: ubuntu-24.04
-    name: image push AMD64
+    name: build and push multi-arch image (Release)
     steps:
       - name: check out the repo
         uses: actions/checkout@v6
@@ -35,117 +37,13 @@ jobs:
           tags: |
             type=ref,event=tag
 
-      - name: build and push ib-sriov-cni
+      - name: build and push ib-sriov-cni (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          platforms: linux/amd64
+          platforms: ${{ env.PLATFORMS }}
           tags: |
-            ${{ steps.docker_meta.outputs.tags }}-amd64
+            ${{ steps.docker_meta.outputs.tags }}
+          labels: ${{ steps.docker_meta.outputs.labels }}  
           file: ./Dockerfile
-
-  build-and-push-arm64-ib-sriov-cni:
-    runs-on: ubuntu-24.04
-    name: image push ARM64
-    steps:
-      - name: check out the repo
-        uses: actions/checkout@v6
-
-      - name: set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: login to Docker
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: docker meta
-        id: docker_meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          flavor: |
-            latest=false
-          tags: |
-            type=ref,event=tag
-
-      - name: build and push ib-sriov-cni
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          platforms: linux/arm64
-          tags: |
-            ${{ steps.docker_meta.outputs.tags }}-arm64
-          file: ./Dockerfile
-
-  build-and-push-ppc64le-ib-sriov-cni:
-    runs-on: ubuntu-24.04
-    name: image push ppc64le
-    steps:
-      - name: check out the repo
-        uses: actions/checkout@v6
-
-      - name: set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: login to Docker
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: docker meta
-        id: docker_meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE_NAME }}
-          flavor: |
-            latest=false
-          tags: |
-            type=ref,event=tag
-
-      - name: build and push ib-sriov-cni
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          platforms: linux/arm64
-          tags: |
-            ${{ steps.docker_meta.outputs.tags }}-ppc64le
-          file: ./Dockerfile
-
-  push-manifest:
-    runs-on: ubuntu-24.04
-    needs: [build-and-push-amd64-ib-sriov-cni,build-and-push-arm64-ib-sriov-cni,build-and-push-ppc64le-ib-sriov-cni]
-    steps:
-    - name: set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: docker meta
-      id: docker_meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.IMAGE_NAME }}
-        flavor: |
-          latest=false
-        tags: |
-          type=ref,event=tag
-
-    - name: login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: create manifest for multi-arch images
-      run: |
-        docker buildx imagetools create -t ${{ steps.docker_meta.outputs.tags }} \
-          ${{ steps.docker_meta.outputs.tags }}-amd64 \
-          ${{ steps.docker_meta.outputs.tags }}-arm64 \
-          ${{ steps.docker_meta.outputs.tags }}-ppc64le

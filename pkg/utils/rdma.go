@@ -33,9 +33,9 @@ func MoveRdmaDevToNs(rdmaDev string, targetNs ns.NetNS) error {
 
 // Move RDMA device to namespace
 func MoveRdmaDevToNsPci(pciDev string, targetNs ns.NetNS) (string, error) { // (hostRdmaDev, error)
-	rdmaDevs, err := rdmaManager.GetRdmaDevsForPciDev(pciDev)
-	if err != nil || len(rdmaDevs) == 0 {
-		return "", fmt.Errorf("failed to get RDMA devices for PCI device: %s. %v", pciDev, err)
+	rdmaDevs := rdmaManager.GetRdmaDevsForPciDev(pciDev)
+	if len(rdmaDevs) == 0 {
+		return "", fmt.Errorf("failed to get RDMA devices for PCI device: %s. No RDMA devices found", pciDev)
 	}
 
 	if len(rdmaDevs) != 1 {
@@ -47,7 +47,7 @@ func MoveRdmaDevToNsPci(pciDev string, targetNs ns.NetNS) (string, error) { // (
 	// Move RDMA device to container namespace
 	rdmaDev := rdmaDevs[0]
 
-	err = MoveRdmaDevToNs(rdmaDev, targetNs)
+	err := MoveRdmaDevToNs(rdmaDev, targetNs)
 	if err != nil {
 		return "", fmt.Errorf("failed to move RDMA device %s to namespace. %v", rdmaDev, err)
 	}

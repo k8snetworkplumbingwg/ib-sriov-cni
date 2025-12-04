@@ -50,7 +50,7 @@ var _ = Describe("Types", func() {
 					ContIFNames:         "net1",
 					PKey:                "0x8001",
 					LinkState:           "enable",
-					RdmaIso:             true,
+					RdmaIsolation:       true,
 					IBKubernetesEnabled: false,
 					RdmaNetState: rdmatypes.RdmaNetState{
 						Version:              "1.0",

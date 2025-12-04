@@ -222,6 +222,45 @@ func (s *sriovManager) ReleaseVF(conf *types.NetConf, podifName, cid string, net
 	})
 }
 
+// applyVFGuid handles VF GUID configuration and validation for both VFIO and regular VFs
+func (s *sriovManager) applyVFGuid(conf *types.NetConf, pfLink netlink.Link) error {
+	if conf.GUID != "" {
+		if !utils.IsValidGUID(conf.GUID) {
+			return fmt.Errorf("invalid guid %s", conf.GUID)
+		}
+
+		// For VFIO VF devices, we can't read current GUID from VF interface
+		if conf.VfioPciMode {
+			// Save all-F GUID to reset to during deletion
+			conf.HostIFGUID = utils.DefaultGUID
+		} else {
+			// Regular VF: save current GUID from VF link
+			vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+			if err != nil {
+				return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+			}
+			conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
+		}
+
+		// Set link guid
+		if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
+			return err
+		}
+	} else if !conf.VfioPciMode {
+		// Verify VF have valid GUID (skip for VFIO as we can't access VF interface)
+		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
+		if err != nil {
+			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
+		}
+
+		guid := utils.GetGUIDFromHwAddr(vfLink.Attrs().HardwareAddr)
+		if guid == "" || utils.IsAllZeroGUID(guid) || utils.IsAllOnesGUID(guid) {
+			return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
+		}
+	}
+	return nil
+}
+
 // ApplyVFConfig configure a VF with parameters given in NetConf
 func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 	pfLink, err := s.nLink.LinkByName(conf.Master)
@@ -248,37 +287,8 @@ func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
 		}
 	}
 
-	// Set link guid
-	if conf.GUID != "" {
-		if !utils.IsValidGUID(conf.GUID) {
-			return fmt.Errorf("invalid guid %s", conf.GUID)
-		}
-		// save link guid
-		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
-		if err != nil {
-			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
-		}
-
-		conf.HostIFGUID = vfLink.Attrs().HardwareAddr.String()[36:]
-
-		// Set link guid
-		if err := s.setVfGUID(conf, pfLink, conf.GUID); err != nil {
-			return err
-		}
-	} else {
-		// Verify VF have valid GUID.
-		vfLink, err := s.nLink.LinkByName(conf.HostIFNames)
-		if err != nil {
-			return fmt.Errorf("failed to lookup vf %q: %v", conf.HostIFNames, err)
-		}
-
-		guid := utils.GetGUIDFromHwAddr(vfLink.Attrs().HardwareAddr)
-		if guid == "" || utils.IsAllZeroGUID(guid) || utils.IsAllOnesGUID(guid) {
-			return fmt.Errorf("VF %s GUID is not valid", conf.HostIFNames)
-		}
-	}
-
-	return nil
+	// Handle VF GUID configuration
+	return s.applyVFGuid(conf, pfLink)
 }
 
 // restoreVFName restores VF name from conf
@@ -329,15 +339,18 @@ func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
 	// This happen when create a VF it guid is all zeros
 	if conf.HostIFGUID != "" {
 		if utils.IsAllZeroGUID(conf.HostIFGUID) {
-			conf.HostIFGUID = "FF:FF:FF:FF:FF:FF:FF:FF"
+			conf.HostIFGUID = utils.DefaultGUID
 		}
 
 		if err := s.setVfGUID(conf, pfLink, conf.HostIFGUID); err != nil {
 			return err
 		}
 		// setVfGUID cause VF to rebind, which change its name. Lets restore it.
+		// For VFIO devices, skip VF name restoration since no rebind occurs
 		// Once setVfGUID wouldn't do rebind to apply GUID this function should be removed
-		return s.restoreVFName(conf)
+		if !conf.VfioPciMode {
+			return s.restoreVFName(conf)
+		}
 	}
 
 	return nil
@@ -356,10 +369,14 @@ func (s *sriovManager) setVfGUID(conf *types.NetConf, pfLink netlink.Link, guidA
 	if err != nil {
 		return fmt.Errorf("failed to add port guid %s: %v", guid, err)
 	}
-	// unbind vf then bind it to apply the guid
-	err = s.utils.RebindVf(conf.Master, conf.DeviceID)
-	if err != nil {
-		return err
+	// For VFIO devices, skip rebind as the device is bound to vfio-pci driver
+	// and doesn't have a network interface that can be unbound/rebound
+	if !conf.VfioPciMode {
+		// unbind vf then bind it to apply the guid
+		err = s.utils.RebindVf(conf.Master, conf.DeviceID)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

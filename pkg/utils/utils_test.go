@@ -81,4 +81,30 @@ var _ = Describe("Utils", func() {
 			Expect(guid).To(Equal(""))
 		})
 	})
+	Context("Checking IsVfioPciDevice function", func() {
+		It("Assuming device bound to vfio-pci driver", func() {
+			// Test with VF (0000:af:06.1) that is bound to vfio-pci in the mock
+			result, err := IsVfioPciDevice("0000:af:06.1")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for valid PCI address")
+			Expect(result).To(Equal(true), "Device bound to vfio-pci driver should return true")
+		})
+		It("Assuming PF device bound to mlx5_core driver", func() {
+			// Test with PF (0000:af:00.1) that should be bound to mlx5_core
+			result, err := IsVfioPciDevice("0000:af:00.1")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for valid PCI address")
+			Expect(result).To(Equal(false), "PF bound to non-vfio driver should return false")
+		})
+		It("Assuming VF device bound to mlx5_core driver", func() {
+			// Test with VF (0000:af:06.0) that should be bound to mlx5_core
+			result, err := IsVfioPciDevice("0000:af:06.0")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for valid PCI address")
+			Expect(result).To(Equal(false), "VF bound to non-vfio driver should return false")
+		})
+		It("Assuming device not bound to any driver", func() {
+			// Non-existing device path will fail readlink, returning false
+			result, err := IsVfioPciDevice("0000:ff:ff.f")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for unbound device")
+			Expect(result).To(Equal(false), "Device not bound to driver should return false")
+		})
+	})
 })

@@ -50,6 +50,12 @@ func LoadDeviceInfo(netConf *types.NetConf) error {
 		return fmt.Errorf("load config: vf pci addr is required")
 	}
 
+	// VFIO devices don't have network interfaces, skip getting interface name
+	if netConf.VfioPciMode {
+		netConf.HostIFNames = ""
+		return nil
+	}
+
 	// Get interface name
 	hostIFNames, err := utils.GetVFLinkNames(netConf.DeviceID)
 	if err != nil || hostIFNames == "" {

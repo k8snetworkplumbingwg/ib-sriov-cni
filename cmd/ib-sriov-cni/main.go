@@ -95,6 +95,30 @@ func unlockCNIExecution(lock *flock.Flock) {
 	_ = lock.Unlock()
 }
 
+func handleVfioPciDetection(netConf *localtypes.NetConf) error {
+	if netConf.DeviceID == "" {
+		return fmt.Errorf("device ID is required for VFIO PCI detection")
+	}
+
+	isVfioPci, err := utils.IsVfioPciDevice(netConf.DeviceID)
+	if err != nil {
+		return fmt.Errorf("failed to check vfio-pci driver binding for device %s: %v", netConf.DeviceID, err)
+	}
+
+	// If vfioPciMode is explicitly set to true, validate the device is actually bound to vfio-pci
+	if netConf.VfioPciMode {
+		if !isVfioPci {
+			return fmt.Errorf("vfioPciMode is enabled but device %s is not bound to vfio-pci driver", netConf.DeviceID)
+		}
+	} else {
+		// Auto-detect: if device is bound to vfio-pci, enable vfioPciMode
+		if isVfioPci {
+			netConf.VfioPciMode = true
+		}
+	}
+	return nil
+}
+
 // Get network config, updated with GUID, device info and network namespace.
 func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) {
 	netConf, err := config.LoadConf(args.StdinData)
@@ -116,11 +140,16 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 			"infiniband SRIOV-CNI failed, Unexpected error. GUID must be provided by ib-kubernetes")
 	}
 
-	if netConf.RdmaIso {
+	if netConf.RdmaIsolation {
 		err = utils.EnsureRdmaSystemMode()
 		if err != nil {
 			return nil, nil, err
 		}
+	}
+
+	// Handle vfio-pci detection
+	if err := handleVfioPciDetection(netConf); err != nil {
+		return nil, nil, err
 	}
 
 	err = config.LoadDeviceInfo(netConf)
@@ -135,18 +164,23 @@ func getNetConfNetns(args *skel.CmdArgs) (*localtypes.NetConf, ns.NetNS, error) 
 	return netConf, netns, nil
 }
 
-// Applies VF config and performs VF setup. if RdmaIso is configured, moves RDMA device into namespace
+// Applies VF config and performs VF setup. if RdmaIsolation is configured, moves RDMA device into namespace
 func doVFConfig(sm localtypes.Manager, netConf *localtypes.NetConf, netns ns.NetNS, args *skel.CmdArgs) (retErr error) {
 	err := sm.ApplyVFConfig(netConf)
 	if err != nil {
 		return fmt.Errorf("infiniBand SRI-OV CNI failed to configure VF %q", err)
 	}
 
+	// VFIO devices don't have network interfaces, skip SetupVF
+	if netConf.VfioPciMode {
+		return nil
+	}
+
 	// Note(adrianc): We do this here as ApplyVFCOnfig is rebinding the VF, causing the RDMA device to be recreated.
 	// We do this here due to some un-intuitive kernel behavior (which i hope will change), moving an RDMA device
 	// to namespace causes all of its associated ULP devices (IPoIB) to be recreated in the default namespace,
 	// hence SetupVF needs to occur after moving RDMA device to namespace
-	if netConf.RdmaIso {
+	if netConf.RdmaIsolation {
 		var rdmaDev string
 		rdmaDev, err = utils.MoveRdmaDevToNsPci(netConf.DeviceID, netns)
 		if err != nil {
@@ -244,7 +278,7 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 			if nsErr == nil {
 				_ = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
 			}
-			if netConf.RdmaIso {
+			if netConf.RdmaIsolation {
 				_ = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
 			}
 		}
@@ -256,7 +290,8 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 		Sandbox: netns.Path(),
 	}}
 
-	if netConf.IPAM.Type != "" {
+	// VFIO devices don't have network interfaces, skip IPAM configuration
+	if netConf.IPAM.Type != "" && !netConf.VfioPciMode {
 		var newResult *current.Result
 		newResult, err = runIPAMPlugin(args.StdinData, netConf)
 		if err != nil {
@@ -294,6 +329,17 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	return types.PrintResult(result, netConf.CNIVersion)
 }
 
+func handleIPAMCleanup(netConf *localtypes.NetConf, stdinData []byte) error {
+	// VFIO devices don't use IPAM
+	if netConf.VfioPciMode {
+		return nil
+	}
+	if netConf.IPAM.Type == ipamDHCP {
+		return fmt.Errorf("ipam type dhcp is not supported")
+	}
+	return ipam.ExecDel(netConf.IPAM.Type, stdinData)
+}
+
 func cmdDel(args *skel.CmdArgs) (retErr error) {
 	// https://github.com/kubernetes/kubernetes/pull/35240
 	if args.Netns == "" {
@@ -320,10 +366,7 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 	sm := sriov.NewSriovManager()
 
 	if netConf.IPAM.Type != "" {
-		if netConf.IPAM.Type == ipamDHCP {
-			return fmt.Errorf("ipam type dhcp is not supported")
-		}
-		err = ipam.ExecDel(netConf.IPAM.Type, args.StdinData)
+		err = handleIPAMCleanup(netConf, args.StdinData)
 		if err != nil {
 			return err
 		}
@@ -352,9 +395,12 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 	}
 	defer unlockCNIExecution(lock)
 
-	err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
-	if err != nil {
-		return err
+	// VFIO devices don't have network interfaces to release
+	if !netConf.VfioPciMode {
+		err = sm.ReleaseVF(netConf, args.IfName, args.ContainerID, netns)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Move RDMA device to default namespace
@@ -364,7 +410,7 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 	//   1. netedv cleanup during ReleaseVF.
 	//   2. rdma dev netns cleanup as ResetVFConfig will rebind the VF.
 	// Doing anything would have yielded the same results however ResetVFConfig will eventually not trigger VF rebind.
-	if netConf.RdmaIso {
+	if netConf.RdmaIsolation {
 		err = utils.MoveRdmaDevFromNs(netConf.RdmaNetState.ContainerRdmaDevName, netns)
 		if err != nil {
 			return fmt.Errorf(

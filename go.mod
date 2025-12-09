@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/containernetworking/cni v1.3.0
-	github.com/containernetworking/plugins v1.8.0
+	github.com/containernetworking/plugins v1.9.0
 	github.com/gofrs/flock v0.13.0
 	github.com/k8snetworkplumbingwg/rdma-cni v1.5.0
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0

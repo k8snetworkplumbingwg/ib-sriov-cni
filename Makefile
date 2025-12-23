@@ -78,8 +78,19 @@ $(HADOLINT_TOOL): | $(BINDIR) ; $(info  installing hadolint...)
 	$(call wget-install-tool,$(HADOLINT_TOOL),"https://github.com/hadolint/hadolint/releases/download/v2.12.1-beta/hadolint-Linux-x86_64")
 
 SHELLCHECK_TOOL = $(BINDIR)/shellcheck
+SHELLCHECK_OS := $(shell uname -s | tr A-Z a-z)
+SHELLCHECK_ARCH := $(shell uname -m)
+ifeq ($(SHELLCHECK_OS),darwin)
+	# macOS only has x86_64 binaries available, use them for all architectures
+	SHELLCHECK_ARCH := x86_64
+else
+	ifeq ($(SHELLCHECK_ARCH),arm64)
+		SHELLCHECK_ARCH := aarch64
+	endif
+endif
+SHELLCHECK_URL := https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.$(SHELLCHECK_OS).$(SHELLCHECK_ARCH).tar.xz
 $(SHELLCHECK_TOOL): | $(BASE) ; $(info  installing shellcheck...)
-	$(call install-shellcheck,$(BINDIR),"https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.linux.x86_64.tar.xz")
+	$(call install-shellcheck,$(BINDIR),$(SHELLCHECK_URL))
 
 # Tests
 

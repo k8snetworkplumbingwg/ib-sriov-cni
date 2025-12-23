@@ -120,7 +120,7 @@ hadolint: $(HADOLINT_TOOL); $(info  running hadolint...) ## Run hadolint
 
 .PHONY: shellcheck
 shellcheck: $(SHELLCHECK_TOOL); $(info  running shellcheck...) ## Run shellcheck
-	$Q $(SHELLCHECK_TOOL) images/entrypoint.sh
+	$Q $(SHELLCHECK_TOOL) images/*.sh
 
 # Container image
 .PHONY: image

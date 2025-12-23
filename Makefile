@@ -78,8 +78,15 @@ $(HADOLINT_TOOL): | $(BINDIR) ; $(info  installing hadolint...)
 	$(call wget-install-tool,$(HADOLINT_TOOL),"https://github.com/hadolint/hadolint/releases/download/v2.12.1-beta/hadolint-Linux-x86_64")
 
 SHELLCHECK_TOOL = $(BINDIR)/shellcheck
+SHELLCHECK_VERSION := v0.11.0
+SHELLCHECK_OS := $(shell uname -s | tr A-Z a-z)
+SHELLCHECK_ARCH := $(shell uname -m)
+ifeq ($(SHELLCHECK_ARCH),arm64)
+	SHELLCHECK_ARCH := aarch64
+endif
+SHELLCHECK_URL := https://github.com/koalaman/shellcheck/releases/download/$(SHELLCHECK_VERSION)/shellcheck-$(SHELLCHECK_VERSION).$(SHELLCHECK_OS).$(SHELLCHECK_ARCH).tar.xz
 $(SHELLCHECK_TOOL): | $(BASE) ; $(info  installing shellcheck...)
-	$(call install-shellcheck,$(BINDIR),"https://github.com/koalaman/shellcheck/releases/download/v0.9.0/shellcheck-v0.9.0.linux.x86_64.tar.xz")
+	$(call install-shellcheck,$(BINDIR),$(SHELLCHECK_URL))
 
 # Tests
 
@@ -113,7 +120,7 @@ hadolint: $(HADOLINT_TOOL); $(info  running hadolint...) ## Run hadolint
 
 .PHONY: shellcheck
 shellcheck: $(SHELLCHECK_TOOL); $(info  running shellcheck...) ## Run shellcheck
-	$Q $(SHELLCHECK_TOOL) images/entrypoint.sh
+	$Q $(SHELLCHECK_TOOL) images/*.sh
 
 # Container image
 .PHONY: image

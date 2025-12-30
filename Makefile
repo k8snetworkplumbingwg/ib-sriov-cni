@@ -62,12 +62,12 @@ GOLANGCI_LINT = $(BINDIR)/golangci-lint
 # golangci-lint version should be updated periodically
 # we keep it fixed to avoid it from unexpectedly failing on the project
 # in case of a version bump
-GOLANGCI_LINT_VER = v1.64.8
+GOLANGCI_LINT_VER = v2.7.2
 TIMEOUT = 15
 export GOLANGCI_LINT_CACHE = $(BUILDDIR)/.cache
 
 $(GOLANGCI_LINT): | $(BINDIR) ; $(info  installing golangci-lint...)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
+	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VER))
 
 GOVERALLS = $(BINDIR)/goveralls
 $(GOVERALLS): | $(BINDIR) ; $(info  installing goveralls...)

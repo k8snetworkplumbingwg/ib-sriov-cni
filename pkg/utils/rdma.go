@@ -60,7 +60,7 @@ func MoveRdmaDevFromNs(rdmaDev string, sourceNs ns.NetNS) error {
 	if err != nil {
 		return fmt.Errorf("failed to open current network namespace: %v", err)
 	}
-	defer targetNs.Close()
+	defer func() { _ = targetNs.Close() }()
 
 	err = sourceNs.Do(func(_ ns.NetNS) error {
 		// Move RDMA device to default namespace

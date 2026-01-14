@@ -254,7 +254,7 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	if err != nil {
 		return err
 	}
-	defer netns.Close()
+	defer func() { _ = netns.Close() }()
 
 	sm := sriov.NewSriovManager()
 
@@ -386,7 +386,7 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 
 		return fmt.Errorf("failed to open netns %s: %q", netns, err)
 	}
-	defer netns.Close()
+	defer func() { _ = netns.Close() }()
 
 	// Lock CNI operation to serialize the operation
 	lock, err := lockCNIExecution()

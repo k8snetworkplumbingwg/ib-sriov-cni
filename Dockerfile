@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 COPY . /usr/src/ib-sriov-cni
 
@@ -17,7 +17,7 @@ WORKDIR /usr/src/ib-sriov-cni
 RUN make clean && \
     make build
 
-FROM alpine:3.22.2
+FROM alpine:3.23.2
 COPY --from=builder /usr/src/ib-sriov-cni/build/ib-sriov /usr/bin/
 WORKDIR /
 

@@ -8,7 +8,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/k8snetworkplumbingwg/rdma-cni v1.5.0
 	github.com/k8snetworkplumbingwg/sriovnet v1.2.0
-	github.com/onsi/ginkgo/v2 v2.27.3
+	github.com/onsi/ginkgo/v2 v2.27.5
 	github.com/onsi/gomega v1.38.3
 	github.com/stretchr/testify v1.11.1
 	github.com/vishvananda/netlink v1.3.1

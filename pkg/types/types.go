@@ -90,6 +90,11 @@ type Manager interface {
 // NetlinkManager is an interface to mock nelink library
 type NetlinkManager interface {
 	LinkByName(string) (netlink.Link, error)
+	// LinkByNameForSetVf returns a minimal link object that can be used for VF operations
+	// like LinkSetVfNodeGUID. This avoids the "message too long" error that can occur
+	// with InfiniBand devices that have many VFs, because it reads link info from sysfs
+	// instead of requesting VF info via netlink.
+	LinkByNameForSetVf(string) (netlink.Link, error)
 	LinkSetUp(netlink.Link) error
 	LinkSetDown(netlink.Link) error
 	LinkSetNsFd(netlink.Link, int) error

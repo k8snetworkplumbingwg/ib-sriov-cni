@@ -1,8 +1,13 @@
 package sriov
 
 import (
+	"errors"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
+	"strings"
+	"syscall"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/k8snetworkplumbingwg/sriovnet"
@@ -19,6 +24,38 @@ type MyNetlink struct {
 // LinkByName implements NetlinkManager
 func (n *MyNetlink) LinkByName(name string) (netlink.Link, error) {
 	return netlink.LinkByName(name)
+}
+
+// LinkByNameForSetVf returns a minimal link object that can be used for VF operations
+// like LinkSetVfNodeGUID. This avoids the "message too long" error that can occur
+// with InfiniBand devices that have many VFs. Instead of querying netlink (which
+// requests all VF info and can exceed the kernel's message limit), this method
+// reads the interface index directly from sysfs.
+func (n *MyNetlink) LinkByNameForSetVf(name string) (netlink.Link, error) {
+	// Sanitize the interface name to prevent path traversal
+	if strings.ContainsAny(name, "/\\") {
+		return nil, fmt.Errorf("invalid interface name, contains path separators: %s", name)
+	}
+
+	// Read interface index from sysfs
+	indexPath := fmt.Sprintf("/sys/class/net/%s/ifindex", name)
+	indexData, err := os.ReadFile(indexPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read interface index from %s: %w", indexPath, err)
+	}
+
+	index, err := strconv.Atoi(strings.TrimSpace(string(indexData)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse interface index: %w", err)
+	}
+
+	// Create a minimal Device link with just name and index
+	// This is sufficient for VF operations like LinkSetVfNodeGUID
+	link := &netlink.Device{}
+	link.Attrs().Name = name
+	link.Attrs().Index = index
+
+	return link, nil
 }
 
 // LinkSetUp using NetlinkManager
@@ -263,9 +300,17 @@ func (s *sriovManager) applyVFGuid(conf *types.NetConf, pfLink netlink.Link) err
 
 // ApplyVFConfig configure a VF with parameters given in NetConf
 func (s *sriovManager) ApplyVFConfig(conf *types.NetConf) error {
+	// Try standard LinkByName first. For InfiniBand devices with many VFs, this may fail
+	// with EMSGSIZE because the kernel's netlink response exceeds the message limit.
+	// In that case, fall back to LinkByNameForSetVf which reads minimal info from sysfs.
 	pfLink, err := s.nLink.LinkByName(conf.Master)
 	if err != nil {
-		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		if errors.Is(err, syscall.EMSGSIZE) {
+			pfLink, err = s.nLink.LinkByNameForSetVf(conf.Master)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		}
 	}
 
 	// Set link state
@@ -319,9 +364,17 @@ func (s *sriovManager) restoreVFName(conf *types.NetConf) error {
 
 // ResetVFConfig reset a VF with default values
 func (s *sriovManager) ResetVFConfig(conf *types.NetConf) error {
+	// Try standard LinkByName first. For InfiniBand devices with many VFs, this may fail
+	// with EMSGSIZE because the kernel's netlink response exceeds the message limit.
+	// In that case, fall back to LinkByNameForSetVf which reads minimal info from sysfs.
 	pfLink, err := s.nLink.LinkByName(conf.Master)
 	if err != nil {
-		return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		if errors.Is(err, syscall.EMSGSIZE) {
+			pfLink, err = s.nLink.LinkByNameForSetVf(conf.Master)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to lookup master %q: %v", conf.Master, err)
+		}
 	}
 
 	// Reset link state to `auto`

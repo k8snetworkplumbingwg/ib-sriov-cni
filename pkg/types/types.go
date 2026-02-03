@@ -31,6 +31,7 @@ type IbSriovNetConf struct {
 	RdmaIsolation       bool   `json:"rdmaIsolation,omitempty"`
 	IBKubernetesEnabled bool   `json:"ibKubernetesEnabled,omitempty"`
 	VfioPciMode         bool   `json:"vfioPciMode,omitempty"` // Skip SR-IOV network setup, default false
+	IsVFDevice          bool   `json:"-"`                     // Runtime flag: true if device is VF, false if PF
 	RdmaNetState        rdmatypes.RdmaNetState
 	RuntimeConfig       RuntimeConf `json:"runtimeConfig,omitempty"`
 	Args                struct {

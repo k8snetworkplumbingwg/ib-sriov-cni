@@ -37,7 +37,7 @@ jobs:
           images: ${{ env.IMAGE_NAME }}      
 
       - name: build and push ib-sriov-cni (multi-arch)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

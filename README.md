@@ -207,7 +207,9 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 * `rdmaIsolation` (boolean, optional): Enable RDMA network namespace isolation for RDMA workloads. More information
 about the system requirements to support this mode of operation can be found [here](https://github.com/Mellanox/rdma-cni)
 * `ibKubernetesEnabled` (bool, optional): Enforces ib-sriov-cni to work with [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes).
-* `vfioPciMode` (boolean, optional): Enable VFIO mode for VF devices bound to vfio-pci driver. When enabled, the CNI skips network interface configuration as VFIO devices are used for direct device assignment (e.g., for kubevirt/VM workloads). Defaults to false. If not explicitly set, the mode is auto-detected based on the VF's driver binding.
+* `vfioPciMode` (boolean, optional): Enable VFIO mode for devices (VF or PF) bound to vfio-pci driver. When enabled, the CNI skips network interface configuration as VFIO devices are used for direct device assignment (e.g., for kubevirt/VM workloads). Defaults to false. If not explicitly set, the mode is auto-detected based on the device's driver binding.
+
+> *__Note__*: PF passthrough is only supported in VFIO mode. When using a PF device, it must be bound to the vfio-pci driver and `vfioPciMode` must be enabled (or auto-detected). Moving a PF's InfiniBand interface into a pod network namespace is not supported.
 
 > *__Note__*: If `rdmaIsolation` is set to _true_, [`rdma-cni`](https://github.com/Mellanox/rdma-cni) should not be used.
 

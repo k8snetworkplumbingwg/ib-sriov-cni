@@ -81,6 +81,32 @@ var _ = Describe("Utils", func() {
 			Expect(guid).To(Equal(""))
 		})
 	})
+	Context("Checking IsVirtualFunction function", func() {
+		It("Assuming VF device (has physfn)", func() {
+			// This test assumes 0000:af:06.0 is a VF with physfn symlink
+			result, err := IsVirtualFunction("0000:af:06.0")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for valid PCI address")
+			Expect(result).To(Equal(true), "VF device should return true")
+		})
+		It("Assuming PF device (no physfn)", func() {
+			// Test with the actual PF device 0000:af:00.1 (ib0) from fixture
+			result, err := IsVirtualFunction("0000:af:00.1")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for valid PCI address")
+			Expect(result).To(Equal(false), "PF device should return false")
+		})
+		It("Assuming VFIO VF device (has physfn)", func() {
+			// Test with VFIO VF 0000:af:06.1 - should still be detected as VF
+			result, err := IsVirtualFunction("0000:af:06.1")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for valid PCI address")
+			Expect(result).To(Equal(true), "VFIO VF device should still return true")
+		})
+		It("Assuming non-existing device", func() {
+			// This should return false and no error for non-existing device
+			result, err := IsVirtualFunction("0000:ff:ff.f")
+			Expect(err).NotTo(HaveOccurred(), "Should not return error for non-existing device")
+			Expect(result).To(Equal(false), "Non-existing device should return false")
+		})
+	})
 	Context("Checking IsVfioPciDevice function", func() {
 		It("Assuming device bound to vfio-pci driver", func() {
 			// Test with VF (0000:af:06.1) that is bound to vfio-pci in the mock

@@ -15,7 +15,7 @@ jobs:
     name: build and push multi-arch image (Release)
     steps:
       - name: check out the repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: set up Docker Buildx
         uses: docker/setup-buildx-action@v4

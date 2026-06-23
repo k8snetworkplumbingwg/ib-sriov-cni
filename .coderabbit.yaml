@@ -1,0 +1,273 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+enable_free_tier: true
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_filters:
+    - "!**/vendor/**"
+    - "!vendor/**"
+    - "!go.sum"
+
+  auto_review:
+    enabled: true
+    drafts: true
+
+  # ── Path instructions ────────────────────────────────────────
+  path_instructions:
+
+    # ── Go code — general ────────────────────────────────────────
+    - path: "**/*.go"
+      instructions: |
+        Go security and best practices for InfiniBand SR-IOV CNI:
+        - Never ignore error returns; wrap errors with context using fmt.Errorf("...: %w", err)
+        - Use stdlib crypto/* and golang.org/x/crypto; avoid third-party crypto libraries
+        - Integer overflow: bounds-check user-supplied sizes
+        - context.Context for cancellation and timeouts on all network/hardware operations
+        - Nil pointer checks on hardware info structs (PciAddress, DeviceInfo, VfInfo)
+          before accessing fields — SR-IOV hardware discovery can return incomplete data
+        - Use structured logging (klog) with appropriate verbosity levels
+        - GUID validation: verify InfiniBand GUID format (XX:XX:XX:XX:XX:XX:XX:XX),
+          reject all-zero and all-ones GUIDs, validate byte boundaries
+        - Sysfs/procfs path safety: never construct /sys/ or /proc/ paths from
+          unvalidated user input — always sanitize PCI addresses and device names
+        - CNI spec compliance: cmdAdd, cmdDel, cmdCheck must follow the CNI
+          specification error handling and result types
+        - Netlink operations: nil-check link objects before use, handle transient
+          kernel errors gracefully, verify VF index bounds
+        - RDMA device handling: partial failure recovery when moving RDMA devices
+          between namespaces — rollback on error
+        - IPoIB address handling: validate 20-byte hardware address length before
+          extracting GUIDs from hardware addresses
+
+    # ── CNI plugin entry point ───────────────────────────────────
+    - path: "cmd/**/*.go"
+      instructions: |
+        CNI plugin binary review (cmdAdd, cmdDel, cmdCheck):
+        - CNI spec compliance: cmdAdd must return a valid CNI Result on success and
+          a well-formed error on failure; cmdDel must be idempotent (succeed even if
+          resources are already cleaned up); cmdCheck must verify current state
+        - InfiniBand GUID resolution: verify GUIDs from RuntimeConfig and CNI_ARGS
+          are validated before use — reject invalid, all-zero, or all-ones GUIDs
+        - File locking for CNI serialization: concurrent VF operations on the same PF
+          must be serialized via flock — verify lock acquisition and release on all paths
+        - RDMA isolation flow ordering: EnsureRdmaSystemMode → MoveRdmaDevToNsPci →
+          SetupVF must execute in correct order; verify error handling at each step
+        - IPAM integration: validate IPAM type compatibility, ensure proper cleanup
+          on error (ExecDel must be called if ExecAdd succeeded but later steps fail)
+        - Defer chains for rollback on error: verify ReleaseVF, MoveRdmaDevFromNs,
+          and IPAM ExecDel are called in correct reverse order on failure
+        - Container ID and network namespace path must be validated before use
+
+    # ── SR-IOV VF management ─────────────────────────────────────
+    - path: "pkg/sriov/**/*.go"
+      instructions: |
+        SR-IOV Virtual Function management review:
+        - GUID validation: reject all-zero (00:00:00:00:00:00:00:00) and all-ones
+          (ff:ff:ff:ff:ff:ff:ff:ff) GUIDs; validate XX:XX:XX:XX:XX:XX:XX:XX format
+        - VF GUID setting: both setVfNodeGUID and setVfPortGUID must succeed —
+          partial GUID configuration leaves VF in inconsistent state
+        - VF rebind after GUID change: RebindVf causes the device name to change —
+          code must handle the name change gracefully and re-discover the new name
+        - Link state management: validate that linkState values are restricted to
+          auto/enable/disable enum; reject unknown values
+        - Netlink operations: nil-check link objects returned by netlink.LinkByName,
+          wrap errors with context, handle ENODEV/ENXIO for hot-unplugged devices
+        - VF configuration must preserve and restore original state on release —
+          verify ResetVFConfig restores saved VfState accurately
+        - ApplyVFConfig: verify administrative MAC/GUID and link state changes
+          are applied atomically where possible
+
+    # ── Configuration & netconf parsing ──────────────────────────
+    - path: "pkg/config/**/*.go"
+      instructions: |
+        CNI network configuration (NetConf) parsing review:
+        - NetConf parsing: validate all fields from stdin JSON — especially deviceID
+          (must be a valid PCI address in domain:bus:device.function format)
+        - Link state validation: must reject invalid linkState values early during
+          configuration parsing, not during VF setup
+        - Cache management: secure file I/O for scratch netconf — use proper
+          permissions (0700 for directories, 0600 for files), validate paths
+        - Device info loading (LoadDeviceInfo): handle missing PF/VF sysfs entries
+          gracefully — the device may have been hot-removed or the driver unloaded
+        - LoadConfFromCache: verify the cached netconf is still valid and the
+          referenced VF still exists before using cached data
+        - Input validation: PCI address format, GUID format, network namespace
+          path existence checks
+
+    # ── Utilities & RDMA ─────────────────────────────────────────
+    - path: "pkg/utils/**/*.go"
+      instructions: |
+        Utility functions and RDMA device management review:
+        - Sysfs/procfs path construction: never use unvalidated input in
+          filepath.Join with /sys/ or /proc/ base paths — sanitize PCI addresses,
+          device names, and VF indices to prevent path traversal
+        - GUID helpers (IsValidGUID, IsAllZeroGUID, GetGUIDFromHwAddr): verify
+          boundary conditions — empty strings, wrong-length input, malformed
+          hex digits must all be handled
+        - RDMA device namespace operations: handle partial failures gracefully
+          (e.g., device moved to namespace but subsequent operations fail —
+          must provide rollback or clear error reporting)
+        - IPoIB address extraction: validate 20-byte hardware address length
+          before extracting GUID bytes — short addresses must not cause panics
+        - File I/O for scratch netconf storage: use atomic-safe operations,
+          ensure temp files are cleaned up on error
+        - PCI utility functions: validate PCI address format before sysfs lookups,
+          handle missing sysfs entries (driver not loaded, device removed)
+
+    # ── Type definitions & mocks ─────────────────────────────────
+    - path: "pkg/types/**/*.go"
+      instructions: |
+        Type definitions and interface review:
+        - Interface definitions (Manager, NetlinkManager, PciUtils): verify that
+          mock implementations stay in sync with interface changes — missing
+          methods in mocks cause runtime panics in tests
+        - NetConf struct: ensure JSON tags match CNI spec field names and
+          runtime config expectations; new fields must have omitempty for
+          backward compatibility
+        - VfState struct: verify all fields needed for VF state save/restore
+          are captured — missing fields cause state restoration bugs
+        - Backward compatibility: new fields in configuration structs must have
+          sensible zero values that maintain existing behavior
+
+    # ── Unit tests ───────────────────────────────────────────────
+    - path: "{pkg,cmd}/**/*_test.go"
+      instructions: |
+        Unit test quality:
+        - Use table-driven tests for validation logic with multiple cases
+        - Mock external dependencies (hardware access, netlink, sysfs)
+          rather than requiring real hardware or InfiniBand adapters
+        - Test error paths, not just happy paths — especially GUID validation
+          edge cases, missing sysfs entries, and netlink failures
+        - Assertions should include descriptive failure messages
+        - Verify cleanup logic: test that VF state is properly restored
+          even when errors occur mid-operation
+
+    # ── Kubernetes manifests ─────────────────────────────────────
+    - path: "**/*.{yaml,yml}"
+      instructions: |
+        If this is a Kubernetes manifest:
+        - securityContext: runAsNonRoot, readOnlyRootFilesystem,
+          allowPrivilegeEscalation: false where applicable
+        - Drop ALL capabilities, add only what is required
+        - Resource limits (cpu, memory) on every container
+        - RBAC: least privilege; no cluster-admin for workloads
+        - Liveness + readiness probes defined
+        - automountServiceAccountToken: false unless needed
+
+        IB SR-IOV CNI specifics:
+        - DaemonSet manifests: hostNetwork may be required for CNI plugin
+          installation — verify justification is documented
+        - Init containers or entrypoint scripts that copy the CNI binary to
+          the host /opt/cni/bin must use secure file permissions
+        - Volume mounts for /sys, /var/lib/cni: verify read-only where possible
+        - Image references: verify tags or digests are used, not floating :latest
+
+    # ── Deployment manifests ─────────────────────────────────────
+    - path: "deployment/**/*.yaml"
+      instructions: |
+        IB SR-IOV CNI deployment manifests review:
+        - DaemonSet configuration: verify nodeSelector or affinity rules target
+          only InfiniBand-capable nodes
+        - Volume mounts: /opt/cni/bin mount for CNI binary installation must be
+          writable; /etc/cni/net.d for config files if applicable
+        - Security context: the init/entrypoint container needs write access to
+          host paths — verify this is scoped to minimum required paths
+        - Image pull policy and registry references should be configurable
+        - Tolerations: ensure the DaemonSet can run on control-plane nodes
+          if InfiniBand hardware is present there
+
+    # ── Dockerfiles / container images ───────────────────────────
+    - path: "**/{Dockerfile,Containerfile}*"
+      instructions: |
+        Container image security:
+        - Multi-stage builds preferred; no build tools in final image
+        - USER non-root where possible
+        - COPY specific files, not entire context
+        - No secrets in ENV, ARG, or COPY
+        - No package manager cache in final layer
+        - This project has 3 Dockerfiles:
+          Dockerfile (standard Alpine), Dockerfile.ppc64le (ppc64le cross-build),
+          Dockerfile.rhel7 (OpenShift/RHEL-based)
+        - The entrypoint script (images/entrypoint.sh) copies the CNI binary
+          to the host — verify it sets correct file permissions and ownership
+
+    # ── Supply chain & dependencies ──────────────────────────────
+    - path: "**/go.mod"
+      instructions: |
+        Supply chain security:
+        - New dependencies: justify the need, check license compatibility
+        - Pin exact versions; verify no unnecessary indirect dependencies added
+        - Flag known CVEs (cross-ref osv.dev)
+        - Check for replace directives pointing to forks — ensure they are
+          intentional and documented
+        - Key dependencies to watch:
+          github.com/Mellanox/rdma-cni (RDMA device management),
+          github.com/k8snetworkplumbingwg/sriovnet (SR-IOV network utilities),
+          github.com/vishvananda/netlink (netlink operations),
+          github.com/containernetworking/cni and plugins (CNI spec),
+          github.com/gofrs/flock (file-based locking)
+
+    # ── CI/CD & GitHub Actions ───────────────────────────────────
+    - path: ".github/workflows/**/*"
+      instructions: |
+        CI/CD security:
+        - Pin actions by full SHA, not tag
+        - No secrets in logs; mask sensitive outputs
+        - Least privilege: minimize GITHUB_TOKEN permissions
+        - No pull_request_target with checkout of PR head
+        - Verify buildtest.yml runs the full validation suite
+        - Image build/push workflows: verify image tags, registries,
+          and multi-arch build configuration are correct
+
+    # ── Cryptography files ───────────────────────────────────────
+    - path: "**/*{crypt,cipher,sign,hash,tls,ssl,cert,key,token}*"
+      instructions: |
+        Cryptographic security:
+        - Banned: MD5, SHA1, DES, RC4, 3DES, Blowfish, ECB mode
+        - Symmetric: AES-256-GCM or ChaCha20-Poly1305
+        - Signing: Ed25519 or ECDSA P-256+
+        - Constant-time comparison for all secret/token data
+        - No custom crypto; use vetted libraries only
+
+  # ── Security scanners ────────────────────────────────────────
+  tools:
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    checkov:
+      enabled: true
+    hadolint:
+      enabled: true
+    trivy:
+      enabled: true
+    osvScanner:
+      enabled: true
+    actionlint:
+      enabled: true
+    ast-grep:
+      essential_rules: true
+
+# ── Knowledge base ───────────────────────────────────────────
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CONTRIBUTING.md"
+  issues:
+    scope: "auto"
+  pull_requests:
+    scope: "auto"
+
+chat:
+  auto_reply: true
+  art: false

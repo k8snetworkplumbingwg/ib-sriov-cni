@@ -127,6 +127,9 @@ var _ = Describe("IB SR-IOV thin entrypoint", func() {
 			// Create source IB SR-IOV binary file with test content
 			testContent := []byte("test-ib-sriov-binary-content")
 			Expect(os.WriteFile(ibSriovBinFile, testContent, 0755)).To(Succeed())
+			// WriteFile's mode is masked by umask; force exact 0755 so the
+			// copied-mode assertion below is deterministic.
+			Expect(os.Chmod(ibSriovBinFile, 0755)).To(Succeed())
 
 			// Test copyBinary
 			err = (&Options{
@@ -266,6 +269,70 @@ var _ = Describe("IB SR-IOV thin entrypoint", func() {
 			// The behavior of flag is that it may populate struct fields
 			// with default values when StringVar is called, so we just
 			// verify the function completes without error
+		})
+	})
+
+	Describe("apiServerURL", func() {
+		It("errors when KUBERNETES_SERVICE_HOST/PORT unset", func() {
+			GinkgoT().Setenv("KUBERNETES_SERVICE_HOST", "")
+			GinkgoT().Setenv("KUBERNETES_SERVICE_PORT", "")
+			_, err := apiServerURL()
+			Expect(err).To(HaveOccurred())
+		})
+		It("builds a plain URL for an IPv4 host", func() {
+			GinkgoT().Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+			GinkgoT().Setenv("KUBERNETES_SERVICE_PORT", "443")
+			Expect(apiServerURL()).To(Equal("https://10.0.0.1:443"))
+		})
+		It("brackets an IPv6 host", func() {
+			GinkgoT().Setenv("KUBERNETES_SERVICE_HOST", "fd00::1")
+			GinkgoT().Setenv("KUBERNETES_SERVICE_PORT", "443")
+			Expect(apiServerURL()).To(Equal("https://[fd00::1]:443"))
+		})
+	})
+
+	Describe("generateKubeconfig", func() {
+		var origSADir string
+		BeforeEach(func() { origSADir = serviceAccountDir })
+		AfterEach(func() { serviceAccountDir = origSADir })
+
+		It("fails when the service account token is missing", func() {
+			serviceAccountDir = GinkgoT().TempDir()
+			err := generateKubeconfig(GinkgoT().TempDir())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("service account token"))
+		})
+		It("fails when the CNI conf dir is absent", func() {
+			saDir := GinkgoT().TempDir()
+			Expect(os.WriteFile(filepath.Join(saDir, "token"), []byte("t"), 0o600)).To(Succeed())
+			Expect(os.WriteFile(filepath.Join(saDir, "ca.crt"), []byte("c"), 0o600)).To(Succeed())
+			serviceAccountDir = saDir
+			GinkgoT().Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+			GinkgoT().Setenv("KUBERNETES_SERVICE_PORT", "443")
+			err := generateKubeconfig(filepath.Join(GinkgoT().TempDir(), "nope"))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not present"))
+		})
+		It("fails when the CA cert is missing", func() {
+			saDir := GinkgoT().TempDir()
+			Expect(os.WriteFile(filepath.Join(saDir, "token"), []byte("t"), 0o600)).To(Succeed())
+			serviceAccountDir = saDir
+			err := generateKubeconfig(GinkgoT().TempDir())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("service account CA"))
+		})
+		It("fails when the CNI conf dir is a regular file", func() {
+			saDir := GinkgoT().TempDir()
+			Expect(os.WriteFile(filepath.Join(saDir, "token"), []byte("t"), 0o600)).To(Succeed())
+			Expect(os.WriteFile(filepath.Join(saDir, "ca.crt"), []byte("c"), 0o600)).To(Succeed())
+			serviceAccountDir = saDir
+			GinkgoT().Setenv("KUBERNETES_SERVICE_HOST", "10.0.0.1")
+			GinkgoT().Setenv("KUBERNETES_SERVICE_PORT", "443")
+			file := filepath.Join(GinkgoT().TempDir(), "afile")
+			Expect(os.WriteFile(file, []byte("x"), 0o600)).To(Succeed())
+			err := generateKubeconfig(file)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("not present"))
 		})
 	})
 })

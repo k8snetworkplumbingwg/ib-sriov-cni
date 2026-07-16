@@ -43,6 +43,19 @@ var _ = Describe("Config", func() {
 			_, err := LoadConf(conf)
 			Expect(err).To(HaveOccurred())
 		})
+		It("Loads publishPfGuid when enabled", func() {
+			conf := []byte(`{
+				"name": "ib-pf-network-1",
+				"type": "ib-sriov",
+				"deviceID": "0000:af:06.1",
+				"ibKubernetesEnabled": true,
+				"vfioPciMode": true,
+				"publishPfGuid": true
+			}`)
+			netConf, err := LoadConf(conf)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(netConf.PublishPfGUID).To(BeTrue())
+		})
 	})
 	Context("Checking getVfInfo function", func() {
 		It("Assuming existing PF", func() {

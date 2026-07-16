@@ -1,3 +1,34 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ib-sriov-cni
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ib-sriov-cni
+rules:
+  # Pod get/patch is cluster-wide because Kubernetes RBAC cannot scope pod
+  # access to a single node. The plugin only writes the connection-details
+  # annotation on pods scheduled to its own node, and only when a NAD sets
+  # publishPfGuid; the --gen-kubeconfig identity is otherwise unused.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ib-sriov-cni
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ib-sriov-cni
+subjects:
+  - kind: ServiceAccount
+    name: ib-sriov-cni
+    namespace: kube-system
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -19,8 +50,9 @@ spec:
         name: ib-sriov-cni
     spec:
       hostNetwork: true
+      serviceAccountName: ib-sriov-cni
       nodeSelector:
-        beta.kubernetes.io/arch: amd64
+        kubernetes.io/arch: amd64
       tolerations:
         - key: node-role.kubernetes.io/master
           operator: Exists
@@ -29,6 +61,8 @@ spec:
         - name: kube-ib-sriov-cni
           image: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni
           imagePullPolicy: IfNotPresent
+          args:
+            - --gen-kubeconfig
           securityContext:
             privileged: true
           resources:
@@ -41,7 +75,12 @@ spec:
           volumeMounts:
             - name: cnibin
               mountPath: /host/opt/cni/bin
+            - name: cninet
+              mountPath: /host/etc/cni/net.d
       volumes:
         - name: cnibin
           hostPath:
             path: /opt/cni/bin
+        - name: cninet
+          hostPath:
+            path: /etc/cni/net.d

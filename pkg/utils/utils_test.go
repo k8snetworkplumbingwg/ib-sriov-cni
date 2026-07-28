@@ -107,6 +107,50 @@ var _ = Describe("Utils", func() {
 			Expect(result).To(Equal(false), "Non-existing device should return false")
 		})
 	})
+	Context("Checking ValidatePathComponents function", func() {
+		It("Should accept clean component values", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "abc123"},
+				PathComponent{Name: "interface name", Value: "eth0"},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("Should reject component with forward slash", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "abc/def"},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("container ID"))
+			Expect(err.Error()).To(ContainSubstring("path separator"))
+		})
+		It("Should reject component with backslash", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "interface name", Value: `eth\0`},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("interface name"))
+		})
+		It("Should reject component with path traversal pattern", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "../../tmp"},
+			)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Should reject only the first invalid component", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "a/b"},
+				PathComponent{Name: "interface name", Value: "c/d"},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("container ID"))
+		})
+		It("Should accept empty component value", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: ""},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 	Context("Checking IsVfioPciDevice function", func() {
 		It("Assuming device bound to vfio-pci driver", func() {
 			// Test with VF (0000:af:06.1) that is bound to vfio-pci in the mock

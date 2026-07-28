@@ -2,6 +2,8 @@ package utils
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -105,6 +107,87 @@ var _ = Describe("Utils", func() {
 			result, err := IsVirtualFunction("0000:ff:ff.f")
 			Expect(err).NotTo(HaveOccurred(), "Should not return error for non-existing device")
 			Expect(result).To(Equal(false), "Non-existing device should return false")
+		})
+	})
+	Context("Checking ValidatePathComponents function", func() {
+		It("Should accept clean component values", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "abc123"},
+				PathComponent{Name: "interface name", Value: "eth0"},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+		It("Should reject component with forward slash", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "abc/def"},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("container ID"))
+			Expect(err.Error()).To(ContainSubstring("path separator"))
+		})
+		It("Should reject component with backslash", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "interface name", Value: `eth\0`},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("interface name"))
+		})
+		It("Should reject component with path traversal pattern", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "../../tmp"},
+			)
+			Expect(err).To(HaveOccurred())
+		})
+		It("Should reject only the first invalid component", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: "a/b"},
+				PathComponent{Name: "interface name", Value: "c/d"},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("container ID"))
+		})
+		It("Should accept empty component value", func() {
+			err := ValidatePathComponents(
+				PathComponent{Name: "container ID", Value: ""},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+	Context("Checking scratch NetConf file handling", func() {
+		It("Should preserve regular cache I/O with symlink protection enabled", func() {
+			tempDir := GinkgoT().TempDir()
+			Expect(SaveNetConf("container", tempDir, "net1", map[string]string{"name": "test"})).To(Succeed())
+
+			contents, err := ReadScratchNetConf(filepath.Join(tempDir, "container-net1"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contents).To(MatchJSON(`{"name":"test"}`))
+		})
+
+		It("Should refuse to read through a symlink", func() {
+			tempDir := GinkgoT().TempDir()
+			targetPath := filepath.Join(tempDir, "target")
+			cachePath := filepath.Join(tempDir, "cache")
+			Expect(os.WriteFile(targetPath, []byte("sensitive"), OwnerReadWriteAttrs)).To(Succeed())
+			Expect(os.Symlink(targetPath, cachePath)).To(Succeed())
+
+			contents, err := ReadScratchNetConf(cachePath)
+			Expect(err).To(HaveOccurred())
+			Expect(contents).To(BeNil())
+		})
+
+		It("Should refuse to write through a symlink", func() {
+			tempDir := GinkgoT().TempDir()
+			targetPath := filepath.Join(tempDir, "target")
+			cachePath := filepath.Join(tempDir, "container-net1")
+			Expect(os.WriteFile(targetPath, []byte("sensitive"), OwnerReadWriteAttrs)).To(Succeed())
+			Expect(os.Symlink(targetPath, cachePath)).To(Succeed())
+
+			err := SaveNetConf("container", tempDir, "net1", map[string]string{"name": "test"})
+			Expect(err).To(HaveOccurred())
+
+			contents, err := os.ReadFile(targetPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(contents).To(Equal([]byte("sensitive")))
 		})
 	})
 	Context("Checking IsVfioPciDevice function", func() {

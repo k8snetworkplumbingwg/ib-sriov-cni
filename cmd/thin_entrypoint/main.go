@@ -25,6 +25,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // copyFileAtomic copies a file atomically by writing to a temporary file first, then renaming.
@@ -100,12 +101,16 @@ func setupSignalHandler() context.Context {
 type Options struct {
 	CNIBinDir         string
 	IBSriovCNIBinFile string
+	CNIConfDir        string
+	GenKubeconfig     bool
 	NoSleep           bool
 }
 
 func (o *Options) addFlags() {
 	flag.StringVar(&o.CNIBinDir, "cni-bin-dir", "/host/opt/cni/bin", "CNI binary directory")
 	flag.StringVar(&o.IBSriovCNIBinFile, "ib-sriov-cni-bin-file", "/usr/bin/ib-sriov", "InfiniBand SR-IOV CNI binary file path")
+	flag.StringVar(&o.CNIConfDir, "cni-conf-dir", "/host/etc/cni/net.d", "CNI config directory on the host")
+	flag.BoolVar(&o.GenKubeconfig, "gen-kubeconfig", false, "Generate a node-local kubeconfig from this pod's service account")
 	flag.BoolVar(&o.NoSleep, "no-sleep", false, "Exit after copying binary instead of sleeping") // Used for testing
 
 	flag.Usage = func() {
@@ -166,20 +171,45 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Generate the kubeconfig once up front so --gen-kubeconfig is honored
+	// even together with --no-sleep (used by tests/validation).
+	if opt.GenKubeconfig {
+		if err := generateKubeconfig(opt.CNIConfDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
 	// Exit immediately if --no-sleep is specified
 	if opt.NoSleep {
 		fmt.Println("Binary copied successfully, exiting (--no-sleep)")
 		return
 	}
 
-	// Set up signal handling
-	// This provides graceful shutdown on SIGTERM/SIGINT
+	// Set up signal handling for graceful shutdown on SIGTERM/SIGINT
 	ctx := setupSignalHandler()
 
 	fmt.Println("Entering sleep... (success)")
 
-	// Wait until signal received
-	<-ctx.Done()
+	if opt.GenKubeconfig {
+		// Refresh the kubeconfig periodically: bound service account tokens
+		// rotate, and the host file must stay valid for CNI invocations.
+		refresh := time.NewTicker(kubeconfigRefreshInterval)
+		defer refresh.Stop()
+	loop:
+		for {
+			select {
+			case <-refresh.C:
+				if err := generateKubeconfig(opt.CNIConfDir); err != nil {
+					fmt.Fprintf(os.Stderr, "kubeconfig refresh failed: %v\n", err)
+				}
+			case <-ctx.Done():
+				break loop
+			}
+		}
+	} else {
+		<-ctx.Done()
+	}
 
 	fmt.Println("Received signal, exiting...")
 }

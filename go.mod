@@ -5,7 +5,7 @@ go 1.26
 require (
 	github.com/containernetworking/cni v1.3.1
 	github.com/containernetworking/plugins v1.9.1
-	github.com/gofrs/flock v0.13.0
+	github.com/gofrs/flock v0.13.1
 	github.com/k8snetworkplumbingwg/rdma-cni v1.6.0
 	github.com/k8snetworkplumbingwg/sriovnet v1.3.0
 	github.com/onsi/ginkgo/v2 v2.32.1
@@ -35,7 +35,7 @@ require (
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	sigs.k8s.io/knftables v0.0.18 // indirect

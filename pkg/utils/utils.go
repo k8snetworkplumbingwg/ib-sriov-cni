@@ -165,9 +165,36 @@ func GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
 	return names, nil
 }
 
-// SaveNetConf takes in container ID, data dir and Pod interface name as string and a json encoded struct Conf
-// and save this Conf in data dir
+// PathComponent represents a named value to validate for path separators.
+type PathComponent struct {
+	Name  string
+	Value string
+}
+
+// ValidatePathComponents checks that none of the given components contain
+// path separator characters (/ or \). Returns an error identifying the
+// first offending component, or nil if all are clean.
+func ValidatePathComponents(components ...PathComponent) error {
+	for _, c := range components {
+		if strings.ContainsAny(c.Value, "/\\") {
+			return fmt.Errorf("invalid %s %q: contains path separator", c.Name, c.Value)
+		}
+	}
+	return nil
+}
+
+// SaveNetConf validates and saves the container network configuration.
+// It takes a container ID, data dir, pod interface name, and a Conf struct,
+// and persists the configuration in the data dir. It rejects container IDs
+// and interface names containing path separators.
 func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
+	if err := ValidatePathComponents(
+		PathComponent{Name: "container ID", Value: cid},
+		PathComponent{Name: "interface name", Value: podIfName},
+	); err != nil {
+		return err
+	}
+
 	netConfBytes, err := json.Marshal(conf)
 	if err != nil {
 		return fmt.Errorf("error serializing delegate netconf: %v", err)

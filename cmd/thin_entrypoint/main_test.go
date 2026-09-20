@@ -3,9 +3,12 @@ package main
 // disable dot-imports only for testing
 //revive:disable:dot-imports
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:golint
@@ -148,6 +151,60 @@ var _ = Describe("IB SR-IOV thin entrypoint", func() {
 			fileInfo, err := os.Stat(dstFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fileInfo.Mode().Perm()).To(Equal(os.FileMode(0755)))
+		})
+
+		It("should support concurrent copies to the same destination", func() {
+			tmpDir, err := os.MkdirTemp("", "ib_sriov_thin_entrypoint_tmp")
+			Expect(err).NotTo(HaveOccurred())
+			defer os.RemoveAll(tmpDir)
+
+			cniBinDir := filepath.Join(tmpDir, "cni_bin_dir")
+			blockedSource := filepath.Join(tmpDir, "blocked-source")
+			regularSource := filepath.Join(tmpDir, "regular-source")
+			dstFile := filepath.Join(cniBinDir, "ib-sriov")
+			Expect(os.Mkdir(cniBinDir, 0755)).To(Succeed())
+			Expect(syscall.Mkfifo(blockedSource, 0600)).To(Succeed())
+
+			regularContent := []byte("regular-source-content")
+			Expect(os.WriteFile(regularSource, regularContent, 0755)).To(Succeed())
+
+			prefix := bytes.Repeat([]byte("a"), 4*1024*1024)
+			suffix := []byte("blocked-source-complete")
+			writerBlocked := make(chan struct{})
+			releaseWriter := make(chan struct{})
+			writerErr := make(chan error, 1)
+			go func() {
+				src, openErr := os.OpenFile(blockedSource, os.O_WRONLY, 0)
+				if openErr != nil {
+					writerErr <- openErr
+					return
+				}
+				defer src.Close()
+
+				if _, copyErr := io.Copy(src, bytes.NewReader(prefix)); copyErr != nil {
+					writerErr <- copyErr
+					return
+				}
+				close(writerBlocked)
+				<-releaseWriter
+				_, writeErr := src.Write(suffix)
+				writerErr <- writeErr
+			}()
+
+			firstCopyErr := make(chan error, 1)
+			go func() {
+				firstCopyErr <- copyFileAtomic(blockedSource, dstFile)
+			}()
+
+			<-writerBlocked
+			Expect(copyFileAtomic(regularSource, dstFile)).To(Succeed())
+			close(releaseWriter)
+			Expect(<-writerErr).To(Succeed())
+			Expect(<-firstCopyErr).To(Succeed())
+
+			copiedContent, err := os.ReadFile(dstFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(copiedContent).To(Equal(append(prefix, suffix...)))
 		})
 
 		It("should fail with missing source file", func() {

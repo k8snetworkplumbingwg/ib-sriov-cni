@@ -45,13 +45,13 @@ func copyFileAtomic(srcFile, dstPath string) error {
 	// Create temporary file in same directory as destination
 	dstDir := filepath.Dir(dstPath)
 	finalName := filepath.Base(dstPath)
-	tempPath := filepath.Join(dstDir, finalName+".temp")
 
-	// #nosec G304 -- dstPath is from trusted command-line flag, validated in verifyPaths()
-	dst, err := os.Create(tempPath)
+	// #nosec G304 -- dstDir is derived from a trusted command-line flag, validated in verifyPaths()
+	dst, err := os.CreateTemp(dstDir, finalName+".temp-*")
 	if err != nil {
 		return err
 	}
+	tempPath := dst.Name()
 	defer dst.Close()
 	defer os.Remove(tempPath)
 

@@ -197,14 +197,14 @@ var _ = Describe("IB SR-IOV thin entrypoint", func() {
 			}()
 
 			<-writerBlocked
-			Expect(copyFileAtomic(regularSource, dstFile)).To(Succeed())
+			Expect(copyFileAtomic(regularSource, dstFile)).To(Succeed(), "concurrent regular-file copy must succeed")
 			close(releaseWriter)
-			Expect(<-writerErr).To(Succeed())
-			Expect(<-firstCopyErr).To(Succeed())
+			Expect(<-writerErr).To(Succeed(), "FIFO writer must complete the blocked source")
+			Expect(<-firstCopyErr).To(Succeed(), "blocked atomic copy must complete after the concurrent copy")
 
 			copiedContent, err := os.ReadFile(dstFile)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(copiedContent).To(Equal(append(prefix, suffix...)))
+			Expect(err).NotTo(HaveOccurred(), "final destination must be readable")
+			Expect(copiedContent).To(Equal(append(prefix, suffix...)), "last completed copy must preserve the full FIFO content")
 		})
 
 		It("should fail with missing source file", func() {

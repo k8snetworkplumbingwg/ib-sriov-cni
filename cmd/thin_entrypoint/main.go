@@ -49,7 +49,7 @@ func copyFileAtomic(srcFile, dstPath string) error {
 	// #nosec G304 -- dstDir is derived from a trusted command-line flag, validated in verifyPaths()
 	dst, err := os.CreateTemp(dstDir, finalName+".temp-*")
 	if err != nil {
-		return err
+		return fmt.Errorf("create temporary file in %q: %w", dstDir, err)
 	}
 	tempPath := dst.Name()
 	defer dst.Close()

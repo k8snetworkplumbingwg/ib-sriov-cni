@@ -9,7 +9,7 @@ require (
 	github.com/k8snetworkplumbingwg/rdma-cni v1.6.0
 	github.com/k8snetworkplumbingwg/sriovnet v1.3.0
 	github.com/onsi/ginkgo/v2 v2.32.1
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/gomega v1.43.1
 	github.com/stretchr/testify v1.12.1
 	github.com/vishvananda/netlink v1.3.2-0.20251101063711-6e61cd407d1d
 )

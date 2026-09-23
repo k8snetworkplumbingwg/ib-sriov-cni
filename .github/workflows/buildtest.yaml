@@ -9,14 +9,14 @@ jobs:
     name: build
     strategy:
       matrix:
-        go-version: [1.25.x]
+        go-version: [1.26.x]
         os: [ubuntu-24.04]
         goos: [linux]
         goarch: [amd64]
     runs-on: ${{ matrix.os }}
     steps:
       - name: set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ matrix.go-version }}
       - name: check out code into the Go module directory
@@ -33,9 +33,9 @@ jobs:
     needs: build
     steps:
       - name: set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: 1.25.x
+          go-version: 1.26.x
       - name: check out code into the Go module directory
         uses: actions/checkout@v7
       - name: run unit-test image test
@@ -60,9 +60,9 @@ jobs:
     name: coverage
     steps:
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: 1.25.x
+          go-version: 1.26.x
       - name: Check out code into the Go module directory
         uses: actions/checkout@v7
       - name: Go test with coverage

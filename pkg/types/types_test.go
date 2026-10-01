@@ -19,6 +19,8 @@ package types
 import (
 	"encoding/json"
 	"strings"
+	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -229,3 +231,96 @@ var _ = Describe("Types", func() {
 		})
 	})
 })
+
+func TestMarshalThroughAnInterfaceKeepsTheFlatShape(t *testing.T) {
+	// This is the shape the on-disk cache writer uses: an interface holding a
+	// pointer. It is the path that would break silently if the custom
+	// marshaler stopped being reached.
+	conf := &NetConf{}
+	conf.CNIVersion = "0.3.1"
+	conf.Name = "net-a"
+	conf.Type = "ib-sriov"
+	conf.DeviceID = "0000:03:00.0"
+	conf.LogFile = "/var/log/ib-sriov-cni.log"
+
+	var carried interface{} = conf
+	encoded, err := json.Marshal(carried)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var flat map[string]interface{}
+	if err := json.Unmarshal(encoded, &flat); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"cniVersion", "name", "type", "deviceID", "logFile"} {
+		if _, present := flat[key]; !present {
+			t.Fatalf("%q missing from the flattened object: %s", key, encoded)
+		}
+	}
+	if _, nested := flat["PluginConf"]; nested {
+		t.Fatalf("the custom marshaler was bypassed: %s", encoded)
+	}
+}
+
+// An unset or nonsensical value sizes the wait at the default rather than
+// disabling it: a publishing ADD always waits.
+func TestReadinessTimeoutDefaultsWhenUnsized(t *testing.T) {
+	for name, tc := range map[string]struct {
+		seconds int
+		want    time.Duration
+	}{
+		"unset":    {0, DefaultReadinessTimeoutSeconds * time.Second},
+		"negative": {-1, DefaultReadinessTimeoutSeconds * time.Second},
+		"explicit": {30, 30 * time.Second},
+	} {
+		t.Run(name, func(t *testing.T) {
+			n := &NetConf{}
+			n.ReadinessTimeoutSeconds = tc.seconds
+			if got := n.ReadinessTimeout(); got != tc.want {
+				t.Fatalf("ReadinessTimeout() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAwaitsReadinessNeedsBothFlags(t *testing.T) {
+	for name, tc := range map[string]struct {
+		enabled, publish, want bool
+	}{
+		"neither":      {false, false, false},
+		"only enabled": {true, false, false},
+		"only publish": {false, true, false},
+		"both":         {true, true, true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			n := &NetConf{}
+			n.IBKubernetesEnabled, n.PublishPfGUID = tc.enabled, tc.publish
+			if got := n.AwaitsReadiness(); got != tc.want {
+				t.Fatalf("AwaitsReadiness() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// A definition may name any number of seconds; the wait it buys is bounded so
+// the conversion to a duration cannot overflow and no attachment can wait for
+// hours on a controller that is not coming.
+func TestReadinessTimeoutIsCapped(t *testing.T) {
+	for name, tc := range map[string]struct {
+		seconds int
+		want    time.Duration
+	}{
+		"within the cap": {30, 30 * time.Second},
+		"at the cap":     {MaxReadinessTimeoutSeconds, MaxReadinessTimeoutSeconds * time.Second},
+		"above the cap":  {MaxReadinessTimeoutSeconds + 1, MaxReadinessTimeoutSeconds * time.Second},
+		"would overflow": {int(^uint(0) >> 1), MaxReadinessTimeoutSeconds * time.Second},
+	} {
+		t.Run(name, func(t *testing.T) {
+			n := &NetConf{}
+			n.ReadinessTimeoutSeconds = tc.seconds
+			if got := n.ReadinessTimeout(); got != tc.want {
+				t.Fatalf("ReadinessTimeout() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

@@ -59,7 +59,7 @@ The producer's member:
 
 - `deviceID` is a canonical lower-case PCI BDF; it is validated before it
   reaches a sysfs path or an annotation key.
-- `pfGuid` is the function's node GUID, eight colon-separated octets, lower
+- `pfGuid` is the function's port GUID, eight colon-separated octets, lower
   case. The all-zero and all-ones values are placeholders and are never
   published or reused.
 - `deviceIndex` is the node-local rank of the function among InfiniBand PCI
@@ -123,10 +123,25 @@ hold, name the interfaces in the selection, as KubeVirt does; a Multus change
 that passes the delegate's namespace and name to the plugin would remove the
 preconditions, and the plugin will prefer that identity when it exists. Only
 then is hardware touched: the PF is rebound from `vfio-pci`
-to `mlx5_core` and back under the node's CNI lock to read its node GUID,
+to `mlx5_core` and back under the node's CNI lock to read its port GUID
+(port 1's GID 0; the node GUID only when the port exposes no GID table),
 unless the daemon already knows it or the Pod's own `Ready` carries it. The
 member is merged under resourceVersion fencing, retried on conflict, siblings
-preserved. Then the plugin blocks until `Ready` appears for the key on the
+preserved. The record is written first, as intent, and promoted to a
+confirmed publication once the write is acknowledged, so a process that dies
+at the write claims nothing; the configuration ADD saves when it completes is
+that promoted record. A merge the API server rejected undoes the record,
+putting back the one a previous publication of this sandbox left or removing
+it. A write whose outcome is unknown is confirmed from the authoritative copy;
+when that read fails too, the record stays intent: this sandbox's DEL settles
+it against the authoritative copy before it withdraws anything, withdrawing
+only a member it published, the one it set out to publish or the one its
+previous confirmed publication left behind on a retry; once the retry is
+confirmed that previous member is superseded and forgotten. Ownership is decided
+from every later record of the function: a confirmed later publication owns the
+member; intent alone does not stop the sandbox that did publish from
+withdrawing the member it published, and a member a later write replaced it
+with is left for that sandbox's DEL. Then the plugin blocks until `Ready` appears for the key on the
 Pod it published to, or `readinessTimeoutSeconds` (default 120) expires, or
 the Pod is gone, replaced or being deleted. A Pod carrying a deletion
 timestamp will never become ready and kubelet cannot tear its sandbox down
@@ -216,6 +231,13 @@ recorded before later delegates run.
 
 ## Two ways to run the plugin
 
+The manifests under `deployment/readiness/` are reference manifests: they
+carry the pod template each shape needs and place it on `amd64` and `arm64`
+nodes, the architectures the image is built for. Adapt the image reference
+and add your cluster's InfiniBand node selection before applying them. The
+handshake was validated with an equivalent rendering of the daemon shape on
+arm64 nodes, with the same container, arguments and mounts.
+
 **Standalone.** The runtime execs the plugin; it reads and patches the Pod
 through the API server with a node-local kubeconfig, and its readiness wait
 polls the API server. Deploy `deployment/readiness/ib-sriov-cni-standalone.yaml`.
@@ -237,12 +259,15 @@ lifetime, learned only from device reads inside ADD and from a retry's own
 `Ready`; a restart starts empty, so a fresh Pod's first ADD reads the device
 again while a retry that carries `Ready` does not. The plugin process looks for the socket at
 `/run/ib-sriov-cni/ib-sriov.sock` only for publishing attachments; every
-other configuration runs in-process whether or not a daemon is installed, and
-the daemon refuses configurations whose setup or teardown would exec a
+other configuration runs in-process whether or not a daemon is installed,
+unless its definition names a `daemonSocketPath`, which forwards every command
+of that network; the daemon refuses configurations whose setup or teardown would exec a
 delegate such as IPAM. A discovered socket that nothing listens on, as a daemon
 killed without cleaning up leaves behind, is treated like an absent one: the
 command runs in-process. A `daemonSocketPath` named in the definition never
 falls back; its daemon being unreachable is reported. Deploy `deployment/readiness/ib-sriov-cni-daemon.yaml`.
+The privileges it needs and why are under [Security considerations](#security-considerations);
+its timings and metrics under [Observability](#observability).
 
 The stock `deployment/ib-sriov-cni-daemonset.yaml` deploys neither shape and
 is unchanged; a cluster that never sets `publishPfGuid` needs nothing here.
@@ -261,10 +286,269 @@ sandbox creation deadline; CNI does not expose that deadline to the plugin.
 
 | plugin | controller | network definition | result |
 |---|---|---|---|
-| any | any | `publishPfGuid` unset | legacy behavior, unchanged |
+| any | any | `publishPfGuid` unset | legacy behavior, unchanged, in-process unless the definition names a `daemonSocketPath` |
 | with handshake | legacy gate only | `publishPfGuid: true` | every ADD fails at the timeout |
 | with handshake | writes `Ready` | `publishPfGuid: true` | handshake; a retry re-reads the device unless the daemon's GUID cache still holds it |
 | knows `pfGuid` in status | echoes `pfGuid` | `publishPfGuid: true` | handshake; retry never rebinds |
 | older than the `pfGuid` field | echoes `pfGuid` | `publishPfGuid: true` | every ADD fails: unknown field |
 
 Roll the plugin before a controller that writes a new status field.
+
+## Security considerations
+
+What runs with which privileges, who can influence it, and what a compromise
+of each part would allow.
+
+### Components and their privileges
+
+**The plugin process.** Execed by the container runtime as root on the host
+for every ADD, DEL and CHECK, like any CNI plugin. In legacy configurations
+it touches sysfs, netlink and the Pod's network namespace. With the readiness
+handshake it also reads and patches one Pod object through the API server,
+using the node-local kubeconfig under `/etc/cni/net.d/ib-sriov-cni.d/`.
+
+**The installer (`thin_entrypoint`).** A privileged DaemonSet container that
+copies the plugin binary onto the host and, with `--gen-kubeconfig`, writes the
+node-local kubeconfig from its own service-account token and refreshes it.
+
+**The node daemon (`ib-sriov --daemon`).** A privileged DaemonSet container
+with the host network namespace and host mounts for the CNI binary and
+configuration directories, the CNI lock and cache, the network namespace
+directories, the socket directory and the log directory. It executes the same
+CNI code the plugin would, on behalf of the plugin process, so it needs
+everything the plugin needs. It does not share the host PID namespace: it
+opens the netns path each request names through the mounted `/run/netns` and
+`/var/run/netns` directories, so the runtime has to pass paths under them, as
+containerd and CRI-O do, rather than `/proc/<pid>/ns/net`.
+
+### Who can influence what
+
+**Network-definition authors.** A namespaced NetworkAttachmentDefinition is
+tenant-controlled input to a root process, so each field it can set is
+bounded:
+
+- `logFile` names a file under `/var/log/ib-sriov-cni/plugin/` only. The
+  directory part of the value is dropped, `.` and `..` are refused, and an
+  existing entry in that directory that is not a regular file is refused rather
+  than followed. The directory is the plugin's alone; the daemon's own log lives
+  one level up and the daemon refuses to place it in here, so an author cannot
+  name the daemon's file and rotate it away from the daemon's open descriptor.
+  The check trusts the directory's ancestry: it is created root-owned on a
+  root-owned path, and a symlink planted in its place would need host access
+  that a definition author does not have. The leaf check is a plain `lstat`
+  before open, not an atomic guard against a hostile parent.
+- `logFileMaxSize`, `logFileMaxBackups` and `logFileMaxAge` are reduced to
+  1024 megabytes, 30 files and 90 days when set above them, so a definition
+  cannot defeat the disk-usage bound of the host log.
+- `daemonSocketPath` can route an attachment to a socket of the author's
+  choosing. Before dialing a configured path the plugin requires an absolute
+  path, reached without a symbolic link, to a Unix socket owned by the user
+  the plugin runs as (root), so a definition cannot hand the request to a
+  socket another user created. The plugin sends only the CNI invocation
+  (arguments, netns path, configuration), never its environment or
+  credentials, and the daemon it reaches refuses configurations that would
+  exec a delegate.
+- `publishPfGuid` makes the plugin write to the Pod being set up, and only to
+  its own annotation key, fenced by the Pod's UID and resourceVersion. It
+  cannot make the plugin write to any other Pod.
+- `kubeconfig` names the kubeconfig the standalone plugin uses; the default is
+  the node-local file the installer writes. An author who could place a file
+  on the node would already be node root.
+
+**Pod authors.** A Pod's Multus selection decides which definition an interface
+resolves to; an ambiguous selection fails the ADD rather than guessing.
+
+### API access
+
+Both readiness shapes grant `get` and `patch` on Pods; the daemon shape adds
+`list` and `watch` for its informer. The grant is cluster-wide in the shipped
+manifests because RBAC cannot scope Pods to a node: the informer asks the API
+server for the Pods of one node with a field selector on `spec.nodeName`, the
+server applies it, but it is a filter the client requested, not an
+authorization boundary.
+
+Scoping differs by shape. The standalone plugin issues namespaced `get` and
+`patch` requests, so binding the same ClusterRole with per-namespace
+RoleBindings instead of the ClusterRoleBinding confines it to those
+namespaces. The daemon's informer lists and watches Pods across all
+namespaces, a request per-namespace grants do not authorize; with only
+RoleBindings the cache never synchronizes and the daemon refuses to serve.
+The daemon therefore keeps the cluster-wide `list` and `watch`; its `patch`
+could be narrowed separately, but the shipped manifest does not do so. The
+informer is filtered to the daemon's node; a cache miss falls back to a live
+read of the Pod the runtime named, with no node check. The boundary is root-only
+invocation and trusted runtime input, not per-node API authorization.
+
+Every write is a patch of a single annotation on a Pod the plugin has just
+read, conditioned on that read's resourceVersion, and it preserves every other
+member of the annotation. A rejected precondition is retried from a fresh
+read, never forced.
+
+### The socket
+
+The daemon owns `/run/ib-sriov-cni`, created and kept at mode `0700`, so only
+root processes on the node can connect. A request carries the invocation as
+data and a deadline; the daemon clamps the deadline to its own ceiling,
+refuses callers beyond its in-flight limit at once, and cancels a request whose
+caller disconnects. A failed daemon call is never retried in-process by the
+plugin, so a device operation runs at most once per invocation.
+
+### Data on the node
+
+The CNI cache under `/var/lib/cni/ib-sriov` holds each attachment's
+configuration, including the UID of the Pod it was published for, the member
+it published, a previous member a retry may have left behind, and whether the
+publication was confirmed. The log
+files under `/var/log/ib-sriov-cni` (the daemon's) and
+`/var/log/ib-sriov-cni/plugin` (the plugin's) are mode `0600` and record Pod namespace
+and name, PCI addresses and GUIDs. Both directories are root-owned; read access
+to them is node-root access. The kubeconfig under `/etc/cni/net.d/ib-sriov-cni.d`
+carries the DaemonSet's service-account token and is refreshed ahead of
+rotation. The image is distroless and has no shell.
+
+### Blast radius
+
+A compromised plugin process is root on the node already; the handshake adds
+API access limited by the role above. A compromised daemon has the same node
+access plus the ability to patch annotations on any Pod the role reaches,
+which with the cluster-wide binding is every Pod: it could publish false
+connection details or remove another attachment's member, and a controller
+that trusts them could bind or unbind the wrong function. Namespace-scoped
+RoleBindings bound the standalone plugin to the tenants that use the feature;
+the daemon's informer lists and watches Pods across namespaces, so its
+ClusterRoleBinding stays, and confining its patch access means a separate
+namespaced patch grant beside a cluster-wide list and watch grant. Nothing here
+grants access to Secrets, Nodes or other resources.
+
+## Observability
+
+The plugin logs one `CNI request completed` summary for each ADD, DEL, and
+CHECK callback. The node daemon logs a separate summary for each accepted
+request. Existing `cni command served` messages describe handler completion;
+the new daemon summary describes the final response attempt.
+
+### Reading the timings
+
+`mode=shim` measures the host callback, including route selection, forwarding,
+and printing the ADD result. `mode=standalone` measures the local callback.
+`mode=daemon` measures the accepted request after validation and deadline checks,
+through handler execution, cancellation handling, and the response-write attempt.
+A successful write does not prove the client received the result.
+
+A readiness deadline is classified precisely by the daemon. Its CNI error
+envelope carries no telemetry fields, so the shim reports that reply as an
+`error`; a deadline in the shim's own transport is a `timeout`.
+
+Summaries include the command, result, elapsed time, error stage, Pod identity,
+interface, device ID, phase timings, readiness outcome, live Pod GET count,
+PATCH attempts/rejected writes, and GUID discovery attempts. Identities are
+log fields only. CNI stdout still contains only the protocol result.
+
+| Phase | Work measured |
+| --- | --- |
+| `config_identity` | Configuration and Pod/network identity resolution |
+| `device_lock` | First node lock acquisition, including contention |
+| `ownership_lock` | Node lock that makes record-then-publish, and decide-then-withdraw, one step each against the other |
+| `device_inspection` | PCI index lookup and GUID read, including vfio-pci restoration |
+| `guid_cache` | PCI index lookup only: the GUID came from memory, the daemon's cache or the Pod's retained Ready, so no driver was touched |
+| `annotation_merge` | Publication read/merge/PATCH loop, including conflict backoff |
+| `readiness_wait` | Observed Ready convergence: controller work, cache delivery, and poll delay |
+| `netns_setup` | Post-readiness device information and network namespace setup |
+| `final_lock` | Lock acquisition before final device setup or VF teardown |
+| `device_finalize` | ADD device setup and local CNI configuration save |
+| `withdrawal` | DEL's feature check and connection-details withdrawal |
+| `cleanup` | Remaining DEL work, excluding its separately timed lock wait |
+| `transport` | Shim forwarding; log-only, not a daemon phase |
+
+Top-level phases do not overlap. Configuration/identity and cleanup can have
+multiple segments; each segment contributes one phase-histogram observation.
+Sum their durations for a per-request phase total. These phases do not cover
+every instruction, so their sum can be smaller than the total request duration.
+
+Daemon `--log-level=4` adds `CNI phase detail` records for index scanning,
+driver unbind/bind operations, GUID discovery, and deferred vfio restoration.
+These are inclusive child timings; **do not add them to the parent phase**.
+The restore duration includes its own unbind/bind children. Discovery attempts
+are counted without logging each poll. Inspection fails if restoration fails,
+even when the GUID read succeeded.
+
+Logging uses stderr and the optional node-local files. The plugin's file is
+shared by every plugin process on the node: each appends to it, and a process
+that starts and finds it over its size limit renames it aside under a lock, to
+a name no backup has, so no process rotates or overwrites a file another still
+writes to; backups stay uncompressed
+and are pruned once old enough to be no process's open file. The daemon's file
+is its own and rotates in-process. Keep the two files separate. Summaries do not dump network configuration, annotations,
+credentials, or error bodies.
+
+### Enabling daemon metrics
+
+Metrics are disabled by default. Add a daemon argument, not a NAD field:
+
+```text
+--metrics-bind-address=127.0.0.1:9808
+```
+
+Scrape `GET /metrics` on that address. The listener is separate from the private
+CNI Unix socket and cannot execute CNI commands. It has bounded HTTP read,
+write, idle, and shutdown timeouts. Scrapes collect in-memory values only;
+they do not query Kubernetes, UFM, or sysfs.
+
+The endpoint has no built-in authentication or TLS. Loopback is suitable for
+local inspection. To scrape remotely, explicitly configure a reachable address
+and restrict access using the deployment's firewall or network controls. No
+Service, scrape configuration, or public listener is installed automatically.
+An explicitly configured address that cannot bind prevents daemon startup;
+a later metrics-listener failure is logged without interrupting CNI requests.
+
+Each daemon owns a private registry. Counters reset on daemon restart and series
+appear when first observed. There is no standalone metrics server or shim
+metrics-reporting protocol.
+
+| Metric suffix (prefix `ib_sriov_cni_`) | Type | Labels |
+| --- | --- | --- |
+| `request_duration_seconds` | Histogram | `command`, `result` |
+| `phase_duration_seconds` | Histogram | `command`, `phase`, `result` |
+| `requests_inflight` | Gauge | `command` |
+| `readiness_total` | Counter | `outcome` |
+| `live_pod_gets_total` | Counter | `reason`, `result` |
+| `request_rejections_total` | Counter | `reason` |
+
+Commands are `ADD`, `DEL`, and `CHECK`; results are `success`, `error`,
+`timeout`, and `canceled`. Unknown labels map to `other`, never arbitrary input.
+No Pod, namespace, NAD, GUID, PCI address, sandbox, or raw error labels exist.
+Use scrape-target labels for node identity.
+
+Readiness outcomes are `first_read_ready`, `waited_ready`, `timeout`,
+`canceled`, and `error`. First-read Ready still follows publication: it does
+not skip the details update or prove a new UFM request was made.
+
+Live GET reasons are `cache_miss`, `periodic_recheck`, `stale_write`,
+`current_confirmation`, and `standalone`. A GET observation counts an actual
+Pod client operation, including errors; it excludes cache polls and remembered
+negative answers. Client-go internal HTTP retries are not separate observations.
+The informer's LIST/WATCH traffic is not included.
+
+Rejected requests (`unsupported`, `stopping`, `capacity`, `malformed`,
+`expired`) do not enter the request histogram or in-flight gauge; `stopping`
+is the shutdown drain refusing new requests. Admission is immediate; there
+is no queue-wait measurement. HTTP 200 with a CNI error is counted as an error,
+and cancellation after handler success cannot produce a success sample.
+
+Histogram buckets, in seconds, are:
+`.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10, 30, 60, 120, 240, 600, +Inf`.
+The request histogram's `_count` is the completed-request count; do not add
+shim callback counts to it. For example, per-node ADD p95 is:
+
+```promql
+histogram_quantile(0.95,
+  sum by (instance, le) (
+    rate(ib_sriov_cni_request_duration_seconds_bucket{command="ADD"}[5m])
+  )
+)
+```
+
+Compare latency with results, in-flight requests, readiness outcomes, rejected
+requests, and fallback GETs. The Ready wait measures observed convergence,
+not UFM latency alone. Phase measurements support performance investigation;
+they do not change publication, readiness, retry, or driver behavior.

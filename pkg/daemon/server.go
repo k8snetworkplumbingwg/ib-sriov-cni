@@ -66,7 +66,8 @@ func WithShutdownBudget(budget time.Duration) ServerOption {
 }
 
 // NewServer requires an existing private directory owned by this daemon's UID.
-// It never removes an existing path, including a stale or another live socket.
+// It removes a socket nothing listens on, so a restart after an abrupt exit can
+// bind, and refuses any other existing path, a live socket included.
 func NewServer(socket string, timeout time.Duration, maxInFlight int, handler Handler, options ...ServerOption) (*Server, error) {
 	if !filepath.IsAbs(socket) || timeout <= 0 || maxInFlight <= 0 || handler == nil {
 		return nil, errors.New("absolute socket, positive limits and handler are required")

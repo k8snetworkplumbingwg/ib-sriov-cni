@@ -20,67 +20,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+
+	"github.com/k8snetworkplumbingwg/ib-sriov-cni/pkg/install"
 )
-
-// copyFileAtomic copies a file atomically by writing to a temporary file first, then renaming.
-func copyFileAtomic(srcFile, dstPath string) error {
-	// #nosec G304 -- srcFile is from trusted command-line flag, validated in verifyPaths()
-	src, err := os.Open(srcFile)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	// Get source file permissions
-	srcInfo, err := src.Stat()
-	if err != nil {
-		return err
-	}
-
-	// Create temporary file in same directory as destination
-	dstDir := filepath.Dir(dstPath)
-	finalName := filepath.Base(dstPath)
-	tempPath := filepath.Join(dstDir, finalName+".temp")
-
-	// #nosec G304 -- dstPath is from trusted command-line flag, validated in verifyPaths()
-	dst, err := os.Create(tempPath)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-	defer os.Remove(tempPath)
-
-	// Copy file contents
-	if _, err := io.Copy(dst, src); err != nil {
-		return err
-	}
-
-	// Sync to disk
-	if err := dst.Sync(); err != nil {
-		return err
-	}
-
-	if err := dst.Close(); err != nil {
-		return err
-	}
-
-	// Set permissions to match source file
-	if err := os.Chmod(tempPath, srcInfo.Mode()); err != nil {
-		return err
-	}
-
-	// Atomic rename
-	if err := os.Rename(tempPath, dstPath); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // setupSignalHandler creates a context that gets canceled on SIGTERM/SIGINT.
 func setupSignalHandler() context.Context {
@@ -100,17 +46,23 @@ func setupSignalHandler() context.Context {
 type Options struct {
 	CNIBinDir         string
 	IBSriovCNIBinFile string
+	CNIConfDir        string
+	GenKubeconfig     bool
 	NoSleep           bool
 }
 
 func (o *Options) addFlags() {
 	flag.StringVar(&o.CNIBinDir, "cni-bin-dir", "/host/opt/cni/bin", "CNI binary directory")
 	flag.StringVar(&o.IBSriovCNIBinFile, "ib-sriov-cni-bin-file", "/usr/bin/ib-sriov", "InfiniBand SR-IOV CNI binary file path")
+	flag.StringVar(&o.CNIConfDir, "cni-conf-dir", "/host/etc/cni/net.d", "CNI config directory on the host")
+	flag.BoolVar(&o.GenKubeconfig, "gen-kubeconfig", false, "Generate a node-local kubeconfig from this pod's service account")
 	flag.BoolVar(&o.NoSleep, "no-sleep", false, "Exit after copying binary instead of sleeping") // Used for testing
 
 	flag.Usage = func() {
 		fmt.Printf("This is a thin entrypoint for InfiniBand SR-IOV CNI to copy its\n")
-		fmt.Printf("binary into the CNI bin directory on the host filesystem.\n")
+		fmt.Printf("binary into the CNI bin directory on the host filesystem, for\n")
+		fmt.Printf("deployments without the node daemon. With the daemon, run\n")
+		fmt.Printf("ib-sriov --daemon --install-cni-bin-dir=... instead; it installs and serves.\n")
 		fmt.Printf("\nUsage:\n")
 		flag.PrintDefaults()
 	}
@@ -135,16 +87,12 @@ func (o *Options) verifyPaths() error {
 }
 
 func (o *Options) copyBinary() error {
-	srcFile := o.IBSriovCNIBinFile
-	dstFile := filepath.Join(o.CNIBinDir, "ib-sriov")
-
-	fmt.Printf("Copying %q to %q\n", srcFile, dstFile)
-
-	if err := copyFileAtomic(srcFile, dstFile); err != nil {
+	fmt.Printf("Copying %q to %q\n", o.IBSriovCNIBinFile, filepath.Join(o.CNIBinDir, install.BinaryName))
+	dst, err := install.CopyBinary(o.IBSriovCNIBinFile, o.CNIBinDir)
+	if err != nil {
 		return fmt.Errorf("failed to copy binary: %v", err)
 	}
-
-	fmt.Printf("Successfully copied IB SR-IOV CNI binary to %q\n", dstFile)
+	fmt.Printf("Successfully copied IB SR-IOV CNI binary to %q\n", dst)
 	return nil
 }
 
@@ -166,20 +114,37 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Generate the kubeconfig once up front so --gen-kubeconfig is honored
+	// even together with --no-sleep (used by tests/validation).
+	if opt.GenKubeconfig {
+		dst, err := install.WriteKubeconfig(opt.CNIConfDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Generated kubeconfig at %q\n", dst)
+	}
+
 	// Exit immediately if --no-sleep is specified
 	if opt.NoSleep {
 		fmt.Println("Binary copied successfully, exiting (--no-sleep)")
 		return
 	}
 
-	// Set up signal handling
-	// This provides graceful shutdown on SIGTERM/SIGINT
+	// Set up signal handling for graceful shutdown on SIGTERM/SIGINT
 	ctx := setupSignalHandler()
 
 	fmt.Println("Entering sleep... (success)")
 
-	// Wait until signal received
-	<-ctx.Done()
+	if opt.GenKubeconfig {
+		// Bound service account tokens rotate, and the host file must stay
+		// valid for in-process CNI invocations.
+		install.RefreshKubeconfig(ctx, opt.CNIConfDir, install.KubeconfigRefreshInterval, func(err error) {
+			fmt.Fprintf(os.Stderr, "kubeconfig refresh failed: %v\n", err)
+		})
+	} else {
+		<-ctx.Done()
+	}
 
 	fmt.Println("Received signal, exiting...")
 }

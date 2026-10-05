@@ -1,6 +1,11 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+
+	"github.com/containernetworking/cni/pkg/skel"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -42,6 +47,48 @@ var _ = Describe("Config", func() {
                         }`)
 			_, err := LoadConf(conf)
 			Expect(err).To(HaveOccurred())
+		})
+		It("Rejects an out-of-range PCI device number", func() {
+			_, err := LoadConf([]byte(`{"deviceID":"0000:00:20.0"}`))
+			Expect(err).To(MatchError(ContainSubstring("invalid deviceID")))
+		})
+		It("Normalizes an uppercase PCI address", func() {
+			netConf, err := LoadConf([]byte(`{"deviceID":"0000:AF:06.1"}`))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(netConf.DeviceID).To(Equal("0000:af:06.1"))
+		})
+	})
+	Context("Checking LoadConfFromCache function", func() {
+		var cacheDir string
+
+		BeforeEach(func() {
+			cacheDir = GinkgoT().TempDir()
+			previousCNIDir := DefaultCNIDir
+			DefaultCNIDir = cacheDir
+			DeferCleanup(func() {
+				DefaultCNIDir = previousCNIDir
+			})
+		})
+
+		It("Revalidates a cached device ID", func() {
+			cachePath := filepath.Join(cacheDir, "container-net1")
+			Expect(os.WriteFile(cachePath, []byte(`{"deviceID":"0000:00:20.0"}`), 0600)).To(Succeed())
+
+			_, _, err := LoadConfFromCache(&skel.CmdArgs{ContainerID: "container", IfName: "net1"})
+			Expect(err).To(MatchError(ContainSubstring("failed to validate cached NetConf")))
+		})
+
+		It("Revalidates cached link state", func() {
+			cachePath := filepath.Join(cacheDir, "container-net1")
+			Expect(os.WriteFile(cachePath, []byte(`{"deviceID":"0000:af:06.1","link_state":"invalid"}`), 0600)).To(Succeed())
+
+			_, _, err := LoadConfFromCache(&skel.CmdArgs{ContainerID: "container", IfName: "net1"})
+			Expect(err).To(MatchError(ContainSubstring("failed to validate cached NetConf")))
+		})
+
+		It("Rejects path separators before reading the cache", func() {
+			_, _, err := LoadConfFromCache(&skel.CmdArgs{ContainerID: "../container", IfName: "net1"})
+			Expect(err).To(MatchError(ContainSubstring("path separator")))
 		})
 	})
 	Context("Checking getVfInfo function", func() {

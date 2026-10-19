@@ -200,7 +200,7 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 * `name` (string, required): the name of the network
 * `type` (string, required): "ib-sriov"
 * `deviceID` (string, required): A valid pci address of an InfiniBand SR-IOV NIC's VF. e.g. "0000:03:02.3"
-* `guid` (string, optional): InfiniBand Guid for VF.
+* `args.cni.guid` (string, optional): InfiniBand GUID for the VF. A non-empty `runtimeConfig.infinibandGUID` takes precedence.
 * `pkey` (string, optional): InfiniBand pkey for VF, this field is used by [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes) to add pkey with guid to InfiniBand subnet manager client e.g. [Mellanox UFM](https://www.mellanox.com/products/management-software/ufm), [OpenSM](https://docs.mellanox.com/display/MLNXOFEDv461000/OpenSM).
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network, `dhcp` is not supported.
 * `link_state` (string, optional): Enforces link state for the VF. Allowed values: auto, enable, disable.
@@ -218,6 +218,30 @@ about the system requirements to support this mode of operation can be found [he
 ib-sriov supports the following [CNI's Capabilities / Runtime Configuration](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md#dynamic-plugin-specific-fields-capabilities--runtime-configuration):
 
 * `infinibandGUID` (string): Dynamically assign Infiniband GUID to network interface (VF).
+
+To receive a runtime-supplied GUID, advertise `"capabilities": {"infinibandGUID": true}` in the network configuration. The runtime supplies the following field in the JSON input passed to the plugin:
+
+```json
+{
+    "runtimeConfig": {
+        "infinibandGUID": "c2:11:22:33:44:55:66:77"
+    }
+}
+```
+
+To pass the GUID in `args.cni`, use the following JSON input:
+
+```json
+{
+    "args": {
+        "cni": {
+            "guid": "c2:11:22:33:44:55:66:77"
+        }
+    }
+}
+```
+
+The plugin uses a non-empty `runtimeConfig.infinibandGUID` first, then falls back to `args.cni.guid`. A top-level `guid` field is ignored.
 
 ## Usage
 

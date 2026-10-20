@@ -25,6 +25,9 @@ const (
 	OwnerReadWriteAttrs        = 0600
 	VfioPciDriverName          = "vfio-pci"
 	DefaultGUID                = "FF:FF:FF:FF:FF:FF:FF:FF"
+	// NetConfTempPrefix identifies uncommitted cache writes. A committed
+	// filename starts with CNI_CONTAINERID, which must start alphanumeric.
+	NetConfTempPrefix = ".tmp-"
 )
 
 // GetSriovNumVfs takes in a PF name(ifName) as string and returns number of VF configured as int
@@ -170,7 +173,7 @@ func GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
 func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
 	netConfBytes, err := json.Marshal(conf)
 	if err != nil {
-		return fmt.Errorf("error serializing delegate netconf: %v", err)
+		return fmt.Errorf("error serializing delegate netconf: %w", err)
 	}
 
 	s := []string{cid, podIfName}
@@ -187,16 +190,58 @@ func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
 
 func saveScratchNetConf(containerID, dataDir string, netconf []byte) error {
 	if err := os.MkdirAll(dataDir, OwnerReadWriteExecuteAttrs); err != nil {
-		return fmt.Errorf("failed to create the sriov data directory(%q): %v", dataDir, err)
+		return fmt.Errorf("failed to create the sriov data directory(%q): %w", dataDir, err)
 	}
 
 	path := filepath.Join(dataDir, containerID)
 
-	err := os.WriteFile(path, netconf, OwnerReadWriteAttrs)
+	// Written beside the target and renamed over it, so a reader never sees a
+	// truncated or half-written record: a rewrite that fails leaves the
+	// previous record in place.
+	tmp, err := os.CreateTemp(dataDir, NetConfTempPrefix+containerID+"-*")
 	if err != nil {
-		return fmt.Errorf("failed to write container data in the path(%q): %v", path, err)
+		return fmt.Errorf("failed to create container data in the path(%q): %w", path, err)
 	}
+	tmpName := tmp.Name()
+	if _, err = tmp.Write(netconf); err == nil {
+		err = tmp.Chmod(OwnerReadWriteAttrs)
+	}
+	// The rename is only as durable as the data behind it: a record renamed
+	// into place before its bytes reach the disk can come back empty after a
+	// crash, and an unreadable record is what stops a later DEL from
+	// withdrawing. Sync first, so the rename publishes the record or nothing.
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(tmpName, path)
+	}
+	if err != nil {
+		_ = os.Remove(tmpName)
+		return fmt.Errorf("failed to write container data in the path(%q): %w", path, err)
+	}
+	// The new name lives in the directory, not in the file: until the directory
+	// reaches the disk too, a crash can bring back the old name and the record
+	// it pointed at.
+	if err := syncDir(dataDir); err != nil {
+		return fmt.Errorf("failed to sync the sriov data directory(%q): %w", dataDir, err)
+	}
+	return nil
+}
 
+// syncDir flushes a directory's entries to disk.
+func syncDir(dir string) error {
+	d, err := os.Open(dir) /* #nosec G304 */
+	if err != nil {
+		return err
+	}
+	err = d.Sync()
+	if closeErr := d.Close(); err == nil {
+		err = closeErr
+	}
 	return err
 }
 

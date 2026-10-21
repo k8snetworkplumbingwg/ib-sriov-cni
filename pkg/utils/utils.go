@@ -3,12 +3,15 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -165,9 +168,36 @@ func GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
 	return names, nil
 }
 
-// SaveNetConf takes in container ID, data dir and Pod interface name as string and a json encoded struct Conf
-// and save this Conf in data dir
+// PathComponent represents a named value to validate for path separators.
+type PathComponent struct {
+	Name  string
+	Value string
+}
+
+// ValidatePathComponents checks that none of the given components contain
+// path separator characters (/ or \). Returns an error identifying the
+// first offending component, or nil if all are clean.
+func ValidatePathComponents(components ...PathComponent) error {
+	for _, c := range components {
+		if strings.ContainsAny(c.Value, "/\\") {
+			return fmt.Errorf("invalid %s %q: contains path separator", c.Name, c.Value)
+		}
+	}
+	return nil
+}
+
+// SaveNetConf validates and saves the container network configuration.
+// It takes a container ID, data dir, pod interface name, and a Conf struct,
+// and persists the configuration in the data dir. It rejects container IDs
+// and interface names containing path separators.
 func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
+	if err := ValidatePathComponents(
+		PathComponent{Name: "container ID", Value: cid},
+		PathComponent{Name: "interface name", Value: podIfName},
+	); err != nil {
+		return err
+	}
+
 	netConfBytes, err := json.Marshal(conf)
 	if err != nil {
 		return fmt.Errorf("error serializing delegate netconf: %v", err)
@@ -185,29 +215,84 @@ func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
 	return nil
 }
 
+type scratchFile interface {
+	io.WriteCloser
+	Name() string
+}
+
 func saveScratchNetConf(containerID, dataDir string, netconf []byte) error {
+	return writeScratchNetConf(containerID, dataDir, netconf,
+		func(dir string) (scratchFile, error) { return os.CreateTemp(dir, ".netconf-*") }, os.Rename)
+}
+
+// writeScratchNetConf publishes a complete, closed temporary file by atomic rename.
+// The injected operations allow failure testing without mutable global hooks.
+func writeScratchNetConf(containerID, dataDir string, netconf []byte,
+	create func(string) (scratchFile, error), rename func(string, string) error,
+) error {
 	if err := os.MkdirAll(dataDir, OwnerReadWriteExecuteAttrs); err != nil {
-		return fmt.Errorf("failed to create the sriov data directory(%q): %v", dataDir, err)
+		return fmt.Errorf("failed to create the sriov data directory(%q): %w", dataDir, err)
 	}
 
 	path := filepath.Join(dataDir, containerID)
-
-	err := os.WriteFile(path, netconf, OwnerReadWriteAttrs)
-	if err != nil {
-		return fmt.Errorf("failed to write container data in the path(%q): %v", path, err)
+	info, err := os.Lstat(path)
+	if err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing symlink cache path(%q): %w", path, unix.ELOOP)
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to inspect cache path(%q): %w", path, err)
 	}
 
-	return err
+	// CreateTemp exclusively creates a unique file with mode 0600.
+	file, err := create(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to create temporary container data in(%q): %w", dataDir, err)
+	}
+	defer func() { _ = os.Remove(file.Name()) }()
+
+	n, err := file.Write(netconf)
+	if err == nil && n != len(netconf) {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		_ = file.Close()
+		return fmt.Errorf("failed to write container data in the path(%q): %w", path, err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close container data in the path(%q): %w", path, err)
+	}
+	// Rename replaces the directory entry without opening or following its target.
+	if err := rename(file.Name(), path); err != nil {
+		return fmt.Errorf("failed to replace container data in the path(%q): %w", path, err)
+	}
+	return nil
 }
 
 // ReadScratchNetConf takes in container ID, Pod interface name and data dir as string and returns a pointer to Conf
 func ReadScratchNetConf(cRefPath string) ([]byte, error) {
-	data, err := os.ReadFile(cRefPath) /* #nosec G304 */
+	file, err := openFileNoFollow(cRefPath, unix.O_RDONLY, 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read container data in the path(%q): %v", cRefPath, err)
+		return nil, fmt.Errorf("failed to read container data in the path(%q): %w", cRefPath, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read container data in the path(%q): %w", cRefPath, err)
 	}
 
-	return data, err
+	return data, nil
+}
+
+func openFileNoFollow(path string, flag int, perm os.FileMode) (*os.File, error) {
+	// #nosec G304 -- callers validate cache path components and O_NOFOLLOW
+	// prevents the final component from redirecting file access.
+	fd, err := unix.Open(path, flag|unix.O_NOFOLLOW, uint32(perm.Perm()))
+	if err != nil {
+		return nil, err
+	}
+
+	return os.NewFile(uintptr(fd), path), nil
 }
 
 // CleanCachedNetConf removed cached NetConf from disk

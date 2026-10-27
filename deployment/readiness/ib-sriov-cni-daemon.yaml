@@ -1,0 +1,200 @@
+# Readiness handshake WITH the node daemon: one privileged container installs
+# the plugin and the node kubeconfig, then serves CNI commands for its node from
+# a Pod informer, so a readiness wait costs the API server no read per ADD.
+# Apply this INSTEAD of ../ib-sriov-cni-daemonset.yaml (and instead of
+# ib-sriov-cni-standalone.yaml); the ServiceAccount and ClusterRole names are
+# shared. Only network definitions with publishPfGuid are ever served by the
+# daemon; every other configuration keeps running in the plugin process, so a
+# cluster that never enables the handshake gains nothing from this shape and
+# should keep the stock DaemonSet. See docs/readiness-handshake.md, section
+# "Security considerations", for what these privileges are for.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ib-sriov-cni
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ib-sriov-cni
+rules:
+  # Pod access is cluster-wide because Kubernetes RBAC cannot scope it to a
+  # single node. The plugin only writes the connection-details annotation on
+  # pods scheduled to its own node, and only when a NAD sets publishPfGuid.
+  # list and watch serve the daemon's Pod cache. The informer asks for one
+  # node's Pods with a field selector; the API server applies it, but RBAC
+  # cannot express that restriction, and the request spans all namespaces, so
+  # per-namespace RoleBindings would leave it unauthorized and the daemon
+  # unable to start. This ClusterRoleBinding is required for the daemon shape.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ib-sriov-cni
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ib-sriov-cni
+subjects:
+  - kind: ServiceAccount
+    name: ib-sriov-cni
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-ib-sriov-cni-ds
+  namespace: kube-system
+  labels:
+    tier: node
+    app: ib-sriov-cni
+spec:
+  selector:
+    matchLabels:
+      name: ib-sriov-cni
+  template:
+    metadata:
+      labels:
+        tier: node
+        app: ib-sriov-cni
+        name: ib-sriov-cni
+    spec:
+      hostNetwork: true
+      # The daemon opens each request's network namespace path through the
+      # netns directories mounted below, so it does not share the host PID
+      # namespace. The runtime has to pass netns paths under those directories,
+      # as containerd and CRI-O do, not /proc/<pid>/ns/net.
+      serviceAccountName: ib-sriov-cni
+      # The daemon drains for up to 5 s and then waits up to 30 s for a request
+      # that is still restoring a device driver; SIGKILL before that would
+      # leave a PF on the wrong driver.
+      terminationGracePeriodSeconds: 60
+      # The image is built for amd64 and arm64 and the handshake was validated
+      # on arm64 nodes, so this places the DaemonSet on both. Add a selector or
+      # affinity for the nodes that carry InfiniBand functions in your cluster;
+      # that label is cluster-specific.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - arm64
+      tolerations:
+        # Both taint names: control-plane is what current releases apply,
+        # master is what clusters upgraded from older releases still carry.
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        # One container installs the plugin and serves it, the way the
+        # ovn-kubernetes node container installs its CNI binary and then runs:
+        # ib-sriov --daemon copies itself into the host's CNI directory,
+        # writes the node-local kubeconfig the in-process plugin uses and keeps
+        # it ahead of token rotation, then serves CNI commands for this node
+        # from one Pod informer so a readiness handshake costs the API server
+        # no read per ADD. The plugin discovers the socket; nothing in a
+        # network definition points at it.
+        - name: kube-ib-sriov-cni
+          # Untagged like the stock DaemonSet: the release sets the tag. Pin a
+          # released tag or digest before applying this manifest.
+          image: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/bin/ib-sriov"]
+          # On a non-zero exit with no termination message, kubelet copies the
+          # tail of the log into the Pod status, where kubectl describe shows
+          # it. Costs nothing on the happy path.
+          terminationMessagePolicy: FallbackToLogsOnError
+          args:
+            - --daemon
+            - --install-cni-bin-dir=/host/opt/cni/bin
+            - --cni-conf-dir=/host/etc/cni/net.d
+            - --gen-kubeconfig
+            - --socket=/run/ib-sriov-cni/ib-sriov.sock
+            # Second copy of this daemon's log, on the node beside the plugin's
+            # own, so both halves of a CNI call can be read the same way.
+            # stdout is unaffected, so kubectl logs still works.
+            - --log-file=/var/log/ib-sriov-cni/daemon.log
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "100Mi"
+            limits:
+              cpu: "200m"
+              memory: "200Mi"
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+            - name: cninet
+              mountPath: /host/etc/cni/net.d
+            - name: daemonsocket
+              mountPath: /run/ib-sriov-cni
+            - name: cnilock
+              mountPath: /var/run/cni/ib-sriov
+            - name: cnicache
+              mountPath: /var/lib/cni/ib-sriov
+            # Both paths, because a runtime may hand over either form and
+            # this image does not link one to the other.
+            - name: netns
+              mountPath: /run/netns
+              mountPropagation: HostToContainer
+            - name: varnetns
+              mountPath: /var/run/netns
+              mountPropagation: HostToContainer
+            - name: daemonlog
+              mountPath: /var/log/ib-sriov-cni
+      volumes:
+        - name: cnibin
+          hostPath:
+            path: /opt/cni/bin
+        - name: cninet
+          hostPath:
+            path: /etc/cni/net.d
+        # The plugin process reaches the daemon over this socket, so it lives
+        # on the host rather than inside the daemon container.
+        - name: daemonsocket
+          hostPath:
+            path: /run/ib-sriov-cni
+            type: DirectoryOrCreate
+        # The daemon takes the same file lock a plugin process takes, so both
+        # serialize against the same device operations.
+        - name: cnilock
+          hostPath:
+            path: /var/run/cni/ib-sriov
+            type: DirectoryOrCreate
+        # ADD caches the configuration DEL reads back.
+        - name: cnicache
+          hostPath:
+            path: /var/lib/cni/ib-sriov
+            type: DirectoryOrCreate
+        # Each netns directory the runtime may name is mounted from the same
+        # host path; /var/run is not a symlink to /run on every host.
+        - name: netns
+          hostPath:
+            path: /run/netns
+            type: DirectoryOrCreate
+        - name: varnetns
+          hostPath:
+            path: /var/run/netns
+            type: DirectoryOrCreate
+        - name: daemonlog
+          hostPath:
+            path: /var/log/ib-sriov-cni
+            type: DirectoryOrCreate

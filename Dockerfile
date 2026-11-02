@@ -18,7 +18,7 @@ RUN make clean && \
 
 # docker pull gcr.io/distroless/static-debian13
 # docker inspect --format='{{index .RepoDigests 0}}' gcr.io/distroless/static-debian13
-FROM gcr.io/distroless/static-debian13@sha256:58133991db06659feaabe0f4e97a35cebf15ef4ea08f8a4c6d2ee5f75e4aa6a0
+FROM gcr.io/distroless/static-debian13@sha256:448810357cc8e67b7208988abdba0f5ec3d3aebee0a5b13eb624979792cffc0f
 
 COPY --from=builder \
      /usr/src/ib-sriov-cni/build/ib-sriov \

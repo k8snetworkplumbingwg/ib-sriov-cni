@@ -35,7 +35,7 @@ type PodClient struct {
 }
 
 // NewPodClient builds a PodClient from the node's kubeconfig at
-// DefaultKubeconfig, the file the operator provides on the node. The path is fixed: a
+// DefaultKubeconfig, the file the installer writes. The path is fixed: a
 // network definition is tenant input, and which file a root process loads
 // its credentials from is not the definition's to choose. A bracketed-IPv4
 // apiserver host, which client-go rejects, is normalized.

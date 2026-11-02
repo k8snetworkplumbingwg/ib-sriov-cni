@@ -127,6 +127,9 @@ var _ = Describe("IB SR-IOV thin entrypoint", func() {
 			// Create source IB SR-IOV binary file with test content
 			testContent := []byte("test-ib-sriov-binary-content")
 			Expect(os.WriteFile(ibSriovBinFile, testContent, 0755)).To(Succeed())
+			// WriteFile's mode is masked by umask; force exact 0755 so the
+			// copied-mode assertion below is deterministic.
+			Expect(os.Chmod(ibSriovBinFile, 0755)).To(Succeed())
 
 			// Test copyBinary
 			err = (&Options{
@@ -205,9 +208,12 @@ var _ = Describe("IB SR-IOV thin entrypoint", func() {
 			// Create CNI bin directory
 			Expect(os.Mkdir(cniBinDir, 0755)).To(Succeed())
 
-			// Create source file with specific permissions
+			// Create source file with specific permissions. The source must be
+			// executable, so a non-default executable mode shows that the copy
+			// preserves the mode rather than applying its own.
 			testContent := []byte("test-ib-sriov-binary-content")
-			Expect(os.WriteFile(ibSriovBinFile, testContent, 0644)).To(Succeed())
+			Expect(os.WriteFile(ibSriovBinFile, testContent, 0750)).To(Succeed())
+			Expect(os.Chmod(ibSriovBinFile, 0750)).To(Succeed())
 
 			err = (&Options{
 				CNIBinDir:         cniBinDir,

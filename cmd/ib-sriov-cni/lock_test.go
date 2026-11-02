@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -33,7 +34,19 @@ func TestMain(m *testing.M) {
 		time.Sleep(time.Hour)
 		os.Exit(0)
 	}
-	os.Exit(m.Run())
+	// Node-local state this package writes: the CNI cache and the lock
+	// directory. Tests own them here rather than touching the host's paths;
+	// individual tests narrow them further.
+	dir, err := os.MkdirTemp("", "ib-sriov-cni-test")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "tests need a temporary directory:", err)
+		os.Exit(1)
+	}
+	config.DefaultCNIDir = filepath.Join(dir, "cache")
+	config.CniFileLockDir = filepath.Join(dir, "locks")
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }
 
 // A caller that gives up stops waiting for the lock instead of blocking until

@@ -1,14 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
-	"syscall"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
@@ -59,35 +59,49 @@ func getGUIDFromConf(netConf *localtypes.NetConf) string {
 	return ""
 }
 
-func lockCNIExecution() (*flock.Flock, error) {
+// cniLockRetryInterval paces retries while another attachment holds the lock.
+// The lock covers device operations only, so contention clears in the time a
+// rebind takes.
+const cniLockRetryInterval = 50 * time.Millisecond
+
+// lockWaitCeiling bounds every lock acquisition, whatever context the caller
+// holds: a holder that never returns must not hold every later invocation on
+// the node until someone kills them. It is sized for a queue of rebinds, each
+// a few seconds, not for a wait on Kubernetes, which the lock never covers. A
+// variable so tests can shorten it.
+var lockWaitCeiling = 2 * time.Minute
+
+func lockCNIExecution(ctx context.Context) (*flock.Flock, error) {
 	// Note: Unbind/Bind VF and move RDMA device to namespace causes rdma resources to be re-created for the VF.
 	// CNI may be invoked in parallel and kernel may provide the VF's RDMA resources under a different name.
 	// As the mapping of RDMA resources is done in Device plugin prior to CNI invocation, it must not change here.
 	// We serialize the CNI's operation causing kernel to allocate the VF's RDMA resources under the same name.
 	// In the future, Systems should use udev PCI based RDMA device names, ensuring consistent RDMA resources names.
-	err := os.MkdirAll(config.CniFileLockDir, utils.OwnerReadWriteExecuteAttrs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ib-sriov-cni lock file directory(%q): %v", config.CniFileLockDir, err)
-	}
+	return acquireLock(ctx, config.CniFileLockDir, config.CniFileLockName)
+}
 
-	lock := flock.New(filepath.Join(config.CniFileLockDir, config.CniFileLockName))
-	err = lock.Lock()
-	if err != nil {
-		return nil, err
+// acquireLock waits for the node's CNI lock under ctx. The wait ends when the
+// lock is taken, when ctx is done, or when lockWaitCeiling passes, so a caller
+// that has given up stops waiting and a stalled holder cannot block the node
+// for ever.
+//
+// The kernel releases this lock when the holding process exits, by a signal
+// or otherwise, so no signal handler is installed for it: a handler would only
+// change what a signal does to the process without freeing the lock sooner.
+func acquireLock(ctx context.Context, dir, name string) (*flock.Flock, error) {
+	if err := os.MkdirAll(dir, utils.OwnerReadWriteExecuteAttrs); err != nil {
+		return nil, fmt.Errorf("failed to create ib-sriov-cni lock file directory(%q): %w", dir, err)
 	}
-	// unlock on signal
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	go func(sigC chan os.Signal, l *flock.Flock) {
-		// This goroutine will die when the process dies (main exits)
-		sig := <-sigC
-		_ = l.Unlock()
-		signal.Reset(syscall.SIGINT, syscall.SIGTERM)
-		close(sigC)
-		// Re-raise the signal
-		p, _ := os.FindProcess(os.Getpid())
-		_ = p.Signal(sig)
-	}(sigChan, lock)
+	ctx, cancel := context.WithTimeout(ctx, lockWaitCeiling)
+	defer cancel()
+	lock := flock.New(filepath.Join(dir, name))
+	locked, err := lock.TryLockContext(ctx, cniLockRetryInterval)
+	if err != nil {
+		return nil, fmt.Errorf("failed to acquire the ib-sriov-cni lock: %w", err)
+	}
+	if !locked {
+		return nil, errors.New("failed to acquire the ib-sriov-cni lock")
+	}
 	return lock, nil
 }
 
@@ -331,8 +345,9 @@ func cmdAdd(args *skel.CmdArgs) (retErr error) {
 	}
 	defer func() { _ = netns.Close() }()
 
-	// Lock CNI operation to serialize the operation
-	lock, err := lockCNIExecution()
+	// Lock CNI operation to serialize the operation. The plugin process is
+	// its own caller, so nothing cancels the wait on its behalf.
+	lock, err := lockCNIExecution(context.Background())
 	if err != nil {
 		return err
 	}
@@ -468,7 +483,7 @@ func cmdDel(args *skel.CmdArgs) (retErr error) {
 	}
 
 	// Lock CNI operation to serialize the operation
-	lock, err := lockCNIExecution()
+	lock, err := lockCNIExecution(context.Background())
 	if err != nil {
 		return err
 	}

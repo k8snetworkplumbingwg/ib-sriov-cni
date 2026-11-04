@@ -25,6 +25,9 @@ const (
 	OwnerReadWriteAttrs        = 0600
 	VfioPciDriverName          = "vfio-pci"
 	DefaultGUID                = "FF:FF:FF:FF:FF:FF:FF:FF"
+	// NetConfTempPrefix identifies uncommitted cache writes. A committed
+	// filename starts with CNI_CONTAINERID, which must start alphanumeric.
+	NetConfTempPrefix = ".tmp-"
 )
 
 // GetSriovNumVfs takes in a PF name(ifName) as string and returns number of VF configured as int
@@ -170,7 +173,7 @@ func GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error) {
 func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
 	netConfBytes, err := json.Marshal(conf)
 	if err != nil {
-		return fmt.Errorf("error serializing delegate netconf: %v", err)
+		return fmt.Errorf("error serializing delegate netconf: %w", err)
 	}
 
 	s := []string{cid, podIfName}
@@ -186,17 +189,94 @@ func SaveNetConf(cid, dataDir, podIfName string, conf interface{}) error {
 }
 
 func saveScratchNetConf(containerID, dataDir string, netconf []byte) error {
-	if err := os.MkdirAll(dataDir, OwnerReadWriteExecuteAttrs); err != nil {
-		return fmt.Errorf("failed to create the sriov data directory(%q): %v", dataDir, err)
+	created, err := ensureDir(dataDir)
+	if err != nil {
+		return fmt.Errorf("failed to create the sriov data directory(%q): %w", dataDir, err)
 	}
 
 	path := filepath.Join(dataDir, containerID)
 
-	err := os.WriteFile(path, netconf, OwnerReadWriteAttrs)
+	// Written beside the target and renamed over it, so a reader never sees a
+	// truncated or half-written record: a rewrite that fails leaves the
+	// previous record in place. The staging name is the reserved prefix and
+	// a random suffix only: a record name near the filesystem's limit must
+	// not make its own staging name too long.
+	tmp, err := os.CreateTemp(dataDir, NetConfTempPrefix+"*")
 	if err != nil {
-		return fmt.Errorf("failed to write container data in the path(%q): %v", path, err)
+		return fmt.Errorf("failed to create container data in the path(%q): %w", path, err)
 	}
+	tmpName := tmp.Name()
+	if _, err = tmp.Write(netconf); err == nil {
+		err = tmp.Chmod(OwnerReadWriteAttrs)
+	}
+	// The rename is only as durable as the data behind it: a record renamed
+	// into place before its bytes reach the disk can come back empty after a
+	// crash, and an unreadable record is what stops a later DEL from
+	// withdrawing. Sync first, so the rename publishes the record or nothing.
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err == nil {
+		err = os.Rename(tmpName, path)
+	}
+	if err != nil {
+		if removeErr := os.Remove(tmpName); removeErr != nil {
+			return fmt.Errorf("failed to write container data in the path(%q): %w; staging file %q not removed: %w",
+				path, err, tmpName, removeErr)
+		}
+		return fmt.Errorf("failed to write container data in the path(%q): %w", path, err)
+	}
+	// The new name lives in the directory, not in the file: until the directory
+	// reaches the disk too, a crash can bring back the old name and the record
+	// it pointed at. A directory this write created is itself a name in its
+	// parent, so every level created here is synced as well.
+	for _, dir := range append([]string{dataDir}, created...) {
+		if err := syncDir(dir); err != nil {
+			return fmt.Errorf("failed to sync the sriov data directory(%q): %w", dir, err)
+		}
+	}
+	return nil
+}
 
+// ensureDir creates dir and any missing parent, and returns the parents of
+// each directory it created, nearest first, so the caller can sync the entries
+// that now name them.
+func ensureDir(dir string) ([]string, error) {
+	var missing []string
+	for d := dir; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(d); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+		missing = append(missing, d)
+		if filepath.Dir(d) == d {
+			break
+		}
+	}
+	if err := os.MkdirAll(dir, OwnerReadWriteExecuteAttrs); err != nil {
+		return nil, err
+	}
+	parents := make([]string, 0, len(missing))
+	for _, d := range missing {
+		parents = append(parents, filepath.Dir(d))
+	}
+	return parents, nil
+}
+
+// syncDir flushes a directory's entries to disk.
+func syncDir(dir string) error {
+	d, err := os.Open(dir) /* #nosec G304 */
+	if err != nil {
+		return err
+	}
+	err = d.Sync()
+	if closeErr := d.Close(); err == nil {
+		err = closeErr
+	}
 	return err
 }
 

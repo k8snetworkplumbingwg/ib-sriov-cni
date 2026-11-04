@@ -27,6 +27,10 @@ func LoadConf(bytes []byte) (*types.NetConf, error) {
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
 	}
+	// Recorded by ADD, read back from the cache by DEL. A network definition
+	// has no say in which Pod's record a teardown may touch.
+	n.PodUID = ""
+	n.PublishedAt = ""
 
 	// validate that link state is one of supported values
 	if n.LinkState != "" && n.LinkState != "auto" && n.LinkState != "enable" && n.LinkState != "disable" {

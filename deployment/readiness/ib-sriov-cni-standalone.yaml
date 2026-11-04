@@ -1,0 +1,128 @@
+# Readiness handshake: the stock installer, plus the node-local kubeconfig the
+# plugin uses to publish its connection details and read the controller's
+# status, and the ServiceAccount that grants it. Each waiting ADD polls the API
+# server directly. Apply this INSTEAD of ../ib-sriov-cni-daemonset.yaml. A
+# cluster that never sets publishPfGuid does not need it. See
+# docs/readiness-handshake.md.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ib-sriov-cni
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ib-sriov-cni
+rules:
+  # Pod access is cluster-wide because Kubernetes RBAC cannot scope it to a
+  # single node. The plugin only reads and patches the connection-details
+  # annotation of Pods scheduled to its own node, and only for a network
+  # definition that sets publishPfGuid. To confine it to known namespaces, bind
+  # this ClusterRole with per-namespace RoleBindings instead of the binding
+  # below.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ib-sriov-cni
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ib-sriov-cni
+subjects:
+  - kind: ServiceAccount
+    name: ib-sriov-cni
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kube-ib-sriov-cni-ds
+  namespace: kube-system
+  labels:
+    tier: node
+    app: ib-sriov-cni
+spec:
+  selector:
+    matchLabels:
+      name: ib-sriov-cni
+  template:
+    metadata:
+      labels:
+        tier: node
+        app: ib-sriov-cni
+        name: ib-sriov-cni
+    spec:
+      hostNetwork: true
+      serviceAccountName: ib-sriov-cni
+      # The image is built for amd64 and arm64, so this places the DaemonSet on
+      # both. Add a selector for the nodes that carry InfiniBand functions in
+      # your cluster; the label is cluster-specific. With node-feature-discovery
+      # it is, for example:
+      #   nodeSelector:
+      #     feature.node.kubernetes.io/rdma.capable: "true"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - arm64
+      tolerations:
+        # Both taint names: control-plane is what current releases apply,
+        # master is what clusters upgraded from older releases still carry.
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: kube-ib-sriov-cni
+          # Untagged like the stock DaemonSet: the release sets the tag. Pin a
+          # released tag or digest before applying this manifest.
+          image: ghcr.io/k8snetworkplumbingwg/ib-sriov-cni
+          imagePullPolicy: IfNotPresent
+          # thin_entrypoint installs the plugin binary, then writes
+          # <cni-conf-dir>/ib-sriov-cni.d/ib-sriov-cni.kubeconfig from this
+          # Pod's service account and refreshes it ahead of token rotation.
+          args:
+            - --gen-kubeconfig
+          # Copying a binary and writing a kubeconfig into host directories
+          # needs root in the container, not privileges. A host whose
+          # mandatory access control blocks hostPath writes from an
+          # unprivileged container may need privileged: true here.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "50Mi"
+            limits:
+              cpu: "100m"
+              memory: "50Mi"
+          volumeMounts:
+            - name: cnibin
+              mountPath: /host/opt/cni/bin
+            # Only the plugin's own directory, which the installer writes the
+            # kubeconfig into, not every CNI configuration on the node.
+            - name: cninet
+              mountPath: /host/etc/cni/net.d/ib-sriov-cni.d
+      volumes:
+        - name: cnibin
+          hostPath:
+            path: /opt/cni/bin
+        - name: cninet
+          hostPath:
+            path: /etc/cni/net.d/ib-sriov-cni.d
+            type: DirectoryOrCreate

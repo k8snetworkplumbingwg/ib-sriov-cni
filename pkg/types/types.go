@@ -4,12 +4,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 
 	rdmatypes "github.com/k8snetworkplumbingwg/rdma-cni/pkg/types"
+)
+
+// DefaultReadinessTimeoutSeconds bounds the handshake when the network
+// configuration does not size it. A publishing ADD always waits, so there is no
+// publish-without-wait behavior for an unset value to select.
+const (
+	DefaultReadinessTimeoutSeconds = 120
+	// MaxReadinessTimeoutSeconds bounds readinessTimeoutSeconds; see ReadinessTimeout.
+	MaxReadinessTimeoutSeconds = 3600
 )
 
 // NetConf extends types.PluginConf for ib-sriov-cni
@@ -31,7 +41,51 @@ type IbSriovNetConf struct {
 	RdmaIsolation       bool   `json:"rdmaIsolation,omitempty"`
 	IBKubernetesEnabled bool   `json:"ibKubernetesEnabled,omitempty"`
 	VfioPciMode         bool   `json:"vfioPciMode,omitempty"` // Skip SR-IOV network setup, default false
-	IsVFDevice          bool   `json:"-"`                     // Runtime flag: true if device is VF, false if PF
+	// PublishPfGUID publishes the connection-details
+	// annotation, reading each PF port GUID via a temporary
+	// vfio-pci->mlx5_core rebind.
+	PublishPfGUID bool `json:"publishPfGuid,omitempty"`
+	// ReadinessTimeoutSeconds bounds how long an eligible ADD waits for
+	// ib-kubernetes to report that attachment Ready before failing. Publishing
+	// implies waiting, so this only sizes the wait; it does not enable it.
+	// Unset means DefaultReadinessTimeoutSeconds.
+	ReadinessTimeoutSeconds int `json:"readinessTimeoutSeconds,omitempty"`
+	// PodUID is the UID of the Pod an ADD published for, recorded with the
+	// cached configuration so a DEL whose CNI_ARGS omit K8S_POD_UID can still
+	// fence its withdrawal to that Pod. Runtime state: it is never read from
+	// the network configuration, only from the cache the ADD wrote.
+	PodUID string `json:"podUID,omitempty"`
+	// PublishedAt is the instant the ADD recorded this publication, kept with
+	// the cached configuration beside PodUID, so a DEL can tell whether a later
+	// sandbox of the same Pod has since published the same function. It is the
+	// wall clock, or one nanosecond past the latest instant any record on the
+	// node already carries, so the order follows the publications even when the
+	// clock does not. Runtime state: never read from the network configuration.
+	PublishedAt string `json:"publishedAt,omitempty"`
+	// PublishedPfGUID and PublishedDeviceIndex are the member the ADD set out
+	// to publish, kept with the record so a DEL can tell that member from one
+	// another sandbox published for the same function. Runtime state, like
+	// PodUID.
+	PublishedPfGUID      string `json:"publishedPfGuid,omitempty"`
+	PublishedDeviceIndex int    `json:"publishedDeviceIndex,omitempty"`
+	// PublicationUnconfirmed marks a record whose write was neither
+	// acknowledged by the API server nor confirmed from the authoritative
+	// copy: intent, not ownership. A DEL settles it against the authoritative
+	// copy before it withdraws anything.
+	PublicationUnconfirmed bool `json:"publicationUnconfirmed,omitempty"`
+	// PriorPublishedPfGUID and PriorPublishedDeviceIndex are the member this
+	// sandbox's previous confirmed publication left on the Pod when a retried
+	// ADD recorded a different intent. It is this sandbox's own member too,
+	// so a DEL may withdraw it while the retry is unconfirmed; once the retry
+	// is confirmed the Pod carries the new member and this one is forgotten.
+	// An empty GUID means there is none.
+	PriorPublishedPfGUID      string `json:"priorPublishedPfGuid,omitempty"`
+	PriorPublishedDeviceIndex int    `json:"priorPublishedDeviceIndex,omitempty"`
+	// WithdrawExactMember tells a DEL to withdraw only the member this record
+	// published, because a later sandbox's unconfirmed record leaves the
+	// member's owner open. Runtime state for one DEL; never written to disk.
+	WithdrawExactMember bool `json:"-"`
+	IsVFDevice          bool `json:"-"` // Runtime flag: true if device is VF, false if PF
 	RdmaNetState        rdmatypes.RdmaNetState
 	RuntimeConfig       RuntimeConf `json:"runtimeConfig,omitempty"`
 	Args                struct {
@@ -39,7 +93,15 @@ type IbSriovNetConf struct {
 	} `json:"args"`
 }
 
-func (n NetConf) MarshalJSON() ([]byte, error) {
+// MarshalJSON flattens the embedded upstream PluginConf and this plugin's own
+// fields into one object.
+//
+// The receiver is a pointer because NetConf is large enough that copying it per
+// call is worth avoiding. Every caller already holds a pointer, including the
+// cache writer, which takes an interface and is handed *NetConf. Marshaling a
+// NetConf value would silently skip this method and emit a nested object, so
+// pass the pointer.
+func (n *NetConf) MarshalJSON() ([]byte, error) {
 	pluginConfBytes, err := json.Marshal(&n.PluginConf)
 	if err != nil {
 		return nil, fmt.Errorf("error serializing delegate netConf: %v", err)
@@ -107,4 +169,26 @@ type PciUtils interface {
 	GetVFLinkNamesFromVFID(pfName string, vfID int) ([]string, error)
 	GetPciAddress(ifName string, vf int) (string, error)
 	RebindVf(pfName, vfPciAddress string) error
+}
+
+// AwaitsReadiness reports whether this attachment takes the startup handshake:
+// it publishes its connection-details entry and waits for ib-kubernetes to
+// report it Ready.
+func (n *NetConf) AwaitsReadiness() bool {
+	return n.IBKubernetesEnabled && n.PublishPfGUID
+}
+
+// ReadinessTimeout is how long such an ADD waits before failing. A value
+// above MaxReadinessTimeoutSeconds is capped: the runtime's own sandbox
+// deadline is minutes, so a longer wait only delays the retry, and the cap
+// keeps the conversion to a duration from overflowing.
+func (n *NetConf) ReadinessTimeout() time.Duration {
+	seconds := n.ReadinessTimeoutSeconds
+	switch {
+	case seconds <= 0:
+		seconds = DefaultReadinessTimeoutSeconds
+	case seconds > MaxReadinessTimeoutSeconds:
+		seconds = MaxReadinessTimeoutSeconds
+	}
+	return time.Duration(seconds) * time.Second
 }

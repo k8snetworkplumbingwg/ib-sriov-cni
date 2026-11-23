@@ -200,7 +200,7 @@ echo 8 > /sys/class/net/ib0/device/sriov_numvfs
 * `name` (string, required): the name of the network
 * `type` (string, required): "ib-sriov"
 * `deviceID` (string, required): A valid pci address of an InfiniBand SR-IOV NIC's VF. e.g. "0000:03:02.3"
-* `guid` (string, optional): InfiniBand Guid for VF.
+* `args.cni.guid` (string, optional): InfiniBand GUID for the VF. A non-empty `runtimeConfig.infinibandGUID` takes precedence.
 * `pkey` (string, optional): InfiniBand pkey for VF, this field is used by [ib-kubernetes](https://www.github.com/Mellanox/ib-kubernetes) to add pkey with guid to InfiniBand subnet manager client e.g. [Mellanox UFM](https://www.mellanox.com/products/management-software/ufm), [OpenSM](https://docs.mellanox.com/display/MLNXOFEDv461000/OpenSM).
 * `ipam` (dictionary, optional): IPAM configuration to be used for this network, `dhcp` is not supported.
 * `link_state` (string, optional): Enforces link state for the VF. Allowed values: auto, enable, disable.
@@ -219,7 +219,35 @@ ib-sriov supports the following [CNI's Capabilities / Runtime Configuration](htt
 
 * `infinibandGUID` (string): Dynamically assign Infiniband GUID to network interface (VF).
 
+To receive a runtime-supplied GUID, advertise `"capabilities": {"infinibandGUID": true}` in the network configuration. The runtime supplies the following field in the JSON input passed to the plugin:
+
+```json
+{
+    "runtimeConfig": {
+        "infinibandGUID": "c2:11:22:33:44:55:66:77"
+    }
+}
+```
+
+To pass the GUID in `args.cni`, use the following JSON input:
+
+```json
+{
+    "args": {
+        "cni": {
+            "guid": "c2:11:22:33:44:55:66:77"
+        }
+    }
+}
+```
+
+The plugin uses a non-empty `runtimeConfig.infinibandGUID` first, then falls back to `args.cni.guid`. A top-level `guid` field is ignored.
+
 ## Usage
+
+### Set a GUID in the CNI configuration
+
+Set `args.cni.guid` to provide a GUID in the CNI configuration. Replace the VF PCI address and IPAM settings below with values for your node and network:
 
 ```
 # cat > /etc/cni/net.d/10-ib-sriov.conf <<EOF
@@ -231,6 +259,11 @@ ib-sriov supports the following [CNI's Capabilities / Runtime Configuration](htt
     "link_state": "enable",
     "rdmaIsolation": true,
     "ibKubernetesEnabled": false,
+    "args": {
+        "cni": {
+            "guid": "c2:11:22:33:44:55:66:77"
+        }
+    },
     "ipam": {
                 "type": "host-local",
                 "subnet": "10.56.217.0/24",
@@ -245,6 +278,70 @@ ib-sriov supports the following [CNI's Capabilities / Runtime Configuration](htt
 
 EOF
 ```
+
+### Request a GUID from a Pod with Multus
+
+With Multus and the SR-IOV device plugin installed, advertise the `infinibandGUID` capability in the NetworkAttachmentDefinition. The resource name below must match the resource configured in your device plugin. Multus supplies the allocated VF's `deviceID`, so it is not hard-coded in this configuration.
+
+```yaml
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: mynet
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/resourceName: mellanox.com/sriov_rdma
+spec:
+  config: |
+    {
+      "cniVersion": "0.3.1",
+      "name": "mynet",
+      "type": "ib-sriov",
+      "capabilities": {
+        "infinibandGUID": true
+      },
+      "link_state": "enable",
+      "rdmaIsolation": true,
+      "ibKubernetesEnabled": false,
+      "args": {
+        "cni": {
+          "guid": "c2:11:22:33:44:55:66:77"
+        }
+      },
+      "ipam": {
+        "type": "host-local",
+        "subnet": "10.56.217.0/24",
+        "rangeStart": "10.56.217.171",
+        "rangeEnd": "10.56.217.181",
+        "gateway": "10.56.217.1"
+      }
+    }
+```
+
+Set `infiniband-guid` in the Pod's JSON network selection annotation and request the same device-plugin resource:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guid-example
+  namespace: default
+  annotations:
+    k8s.v1.cni.cncf.io/networks: |
+      [{"name": "mynet", "interface": "net1", "infiniband-guid": "c2:11:22:33:44:55:66:88"}]
+spec:
+  containers:
+    - name: pause
+      image: registry.k8s.io/pause:3.10
+      resources:
+        requests:
+          mellanox.com/sriov_rdma: "1"
+        limits:
+          mellanox.com/sriov_rdma: "1"
+```
+
+Multus passes the Pod's `infiniband-guid` as `runtimeConfig.infinibandGUID` to the plugin. In this example, `c2:11:22:33:44:55:66:88` overrides the configured `args.cni.guid` value. Omit `infiniband-guid` from the Pod annotation to use the configured fallback instead.
+
 # SR-IOV Network Operator
 [SR-IOV Network Operator](https://github.com/openshift/sriov-network-operator) is used to manage the SR-IOV interfaces on the nodes e.g. change the number of VFs on the node, it is also used to change the link type for the interfaces ETH to IB and vice versa, the [network policy example](https://github.com/openshift/sriov-network-operator/blob/master/deploy/crds/sriovnetwork.openshift.io_v1_sriovnetworknodepolicy_cr.yaml#L38) shows how to use the operator to change the link type and SR-IOV attributes for a given PCI physical function address.
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -13,6 +14,8 @@ import (
 )
 
 var (
+	// pciAddrRegex validates PCI Bus-Device-Function address format (device is 5 bits: 00-1f)
+	pciAddrRegex = regexp.MustCompile(`^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[01][0-9a-fA-F]\.[0-7]$`)
 	// DefaultCNIDir used for caching NetConf
 	DefaultCNIDir = "/var/lib/cni/ib-sriov"
 	// CniFileLockDir point to the CNI's lockfile
@@ -26,6 +29,13 @@ func LoadConf(bytes []byte) (*types.NetConf, error) {
 	n := &types.NetConf{}
 	if err := json.Unmarshal(bytes, n); err != nil {
 		return nil, fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if n.DeviceID != "" {
+		if !pciAddrRegex.MatchString(n.DeviceID) {
+			return nil, fmt.Errorf("invalid deviceID %q: not a valid PCI address (expected DDDD:DD:DD.D)", n.DeviceID)
+		}
+		n.DeviceID = strings.ToLower(n.DeviceID)
 	}
 
 	// validate that link state is one of supported values
@@ -84,7 +94,12 @@ func getVfInfo(vfPci string) (string, int, error) {
 
 // LoadConfFromCache retrieves cached NetConf returns it along with a handle for removal
 func LoadConfFromCache(args *skel.CmdArgs) (*types.NetConf, string, error) {
-	netConf := &types.NetConf{}
+	if err := utils.ValidatePathComponents(
+		utils.PathComponent{Name: "container ID", Value: args.ContainerID},
+		utils.PathComponent{Name: "interface name", Value: args.IfName},
+	); err != nil {
+		return nil, "", err
+	}
 
 	s := []string{args.ContainerID, args.IfName}
 	cRef := strings.Join(s, "-")
@@ -95,8 +110,9 @@ func LoadConfFromCache(args *skel.CmdArgs) (*types.NetConf, string, error) {
 		return nil, "", fmt.Errorf("error reading cached NetConf in %s with name %s", DefaultCNIDir, cRef)
 	}
 
-	if err = json.Unmarshal(netConfBytes, netConf); err != nil {
-		return nil, "", fmt.Errorf("failed to parse NetConf: %q", err)
+	netConf, err := LoadConf(netConfBytes)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to validate cached NetConf: %w", err)
 	}
 
 	return netConf, cRefPath, nil
